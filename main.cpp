@@ -31,7 +31,7 @@
 #define MCP_COMMAND_INSTALL_ASYNC 0x81
 #define MAX_INSTALL_PATH_LENGTH     0x27F
 
-#define COPY_BUFFER_SZ 1024 * 1024 * 64
+#define COPY_BUFFER_SZ 1024 * 1024 * 8
 
 
 static int installCompleted = 0;
@@ -273,7 +273,7 @@ void printProgressBar(uint64_t current, uint64_t total) {
     for (; i < 100; i+= 4) {
         bar.push_back(' ');
     }
-    sprintf(buf, "]  %d/%d (%d pct)", current, total, percent);
+    sprintf(buf, "]  %.2f/%.2f MiB (%d pct)", current / 1048576.0, total / 1048576.0, percent);
     bar += buf;
     WHBLogPrintf(bar.c_str());
     WHBLogConsoleDraw();
