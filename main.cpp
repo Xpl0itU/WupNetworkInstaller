@@ -21,6 +21,7 @@ int main(int argc, char** argv)
     //!                   Initialize function pointers                   *
     //!*******************************************************************
     WHBLogConsoleInit();
+    WHBLogUdpInit();
     WHBLogConsoleSetColor(0);
     WHBLogPrint("Starting WUP Network Installer");
     WHBLogConsoleDraw();
