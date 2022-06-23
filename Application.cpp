@@ -27,6 +27,9 @@
 #include <vpad/input.h>
 #include <whb/log.h>
 #include "log_console.h"
+#include <sys/stat.h>
+#include <sys/dirent.h>
+
 
 Application *Application::applicationInstance = NULL;
 bool Application::exitApplication = false;
@@ -54,6 +57,24 @@ int Application::exec()
 
 void Application::executeThread(void)
 {
+    struct dirent *dirent = NULL;
+	DIR *dir = NULL;
+
+	dir = opendir("fs:/vol/external01");
+	if (dir == NULL) {
+		WHBLogPrint("Failed to read /vol/external01");
+        WHBLogConsoleDraw();
+    } else {
+        while ((dirent = readdir(dir)) != 0)
+        {
+            bool isDir = dirent->d_type & DT_DIR;
+            const char *filename = dirent->d_name;
+            WHBLogPrintf("%s", filename);
+            WHBLogConsoleDraw();
+        }
+        closedir(dir);
+    }
+
     VPADStatus status;
     VPADReadError error;
     while (!exitApplication) {
