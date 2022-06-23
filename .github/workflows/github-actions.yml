@@ -6,12 +6,17 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
+      - name: Build Docker image
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          push: false
+          tags: wup_build
       - name: Run cmake/devkitppc
-        run: docker run --rm -v ${{ github.workspace }}:/developer wiiulegacy/hbl_builder:0.1 sh -c "mkdir /developer/build && cd /developer/build && /opt/devkitpro/portlibs/wiiu/bin/powerpc-eabi-cmake .. && make"
+        run: docker run --rm -v ${{ github.workspace }}:/developer wup_build sh -c "mkdir -p /developer/build && cd /developer/build && /opt/devkitpro/portlibs/wiiu/bin/powerpc-eabi-cmake .. && make"
       - name: Generate release tag
         id: tag
-        run: |
-          echo "::set-output name=release_tag::alpha_$(date +"%Y%m%d%H%M")_$(git rev-parse --short "$GITHUB_SHA")"
+        run: echo "::set-output name=release_tag::alpha_$(date +"%Y%m%d%H%M")_$(git rev-parse --short "$GITHUB_SHA")"
       - name: Upload rpx
         uses: softprops/action-gh-release@v1
         if: ${{ github.ref == 'refs/heads/master' }}
