@@ -42,9 +42,20 @@ DSTATUS disk_status (
 /*-----------------------------------------------------------------------*/
 
 DSTATUS disk_initialize (
-	BYTE pdrv				/* Physical drive nmuber to identify the drive */
+	BYTE pdrv				/* Physical drive number to identify the drive */
 )
 {
+	// close so we can reinitialize if needed
+	if (usbFd >= 0) {
+		IOSUHAX_FSA_RawClose(fsaFdUsb, usbFd);
+		usbFd = -1;
+	}
+	if (fsaFdUsb >= 0) {
+		IOSUHAX_FSA_Close(fsaFdUsb);
+		fsaFdUsb = -1;
+		IOSUHAX_Close();
+	}
+
 	if (IOSUHAX_Open(NULL) < 0)
         return STA_NOINIT;
 

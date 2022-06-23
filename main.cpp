@@ -6,13 +6,14 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 #include <malloc.h>
 #include <zlib.h>
 
 #include <vpad/input.h>
 #include <whb/log.h>
 #include <whb/log_udp.h>
-#include "log_console.h"
+#include <whb/log_console.h>
 #include <iosuhax.h>
 #include <iosuhax_devoptab.h>
 #include <iosuhax_disc_interface.h>
@@ -22,11 +23,7 @@
 #include <coreinit/memory.h>
 
 #include <whb/proc.h>
-#include <fat.h>
 #include "os_functions.h"
-#include "disc_interface_2.h"
-#include "Device/PhysicalDevice/PhyDeviceManager.h"
-#include "Device/PhysicalDevice/PartitionTableReader.h"
 #include "fatfs/ff.h"
 
 #define MCP_COMMAND_INSTALL_ASYNC 0x81
@@ -36,6 +33,7 @@
 static int installCompleted = 0;
 static uint32_t installError = 0;
 static FATFS fs;
+static int fsaFdWiiU = -1;
 
 
 int someFunc(IOSError err, int* arg)
@@ -43,13 +41,11 @@ int someFunc(IOSError err, int* arg)
     return 0;
 }
 
-
 static void IosInstallCallback(IOSError errorCode, void * priv_data)
 {
 	installError = (uint32_t) errorCode;
 	installCompleted = 1;
 }
-
 
 int install()
 {
@@ -257,6 +253,31 @@ void waitForKey() {
     }
 }
 
+bool copyFile(char *srcPath, char *dstPath) {
+    FIL fp;
+    if (f_open(&fp, srcPath, FA_READ) != F_OK) {
+        return false;
+    }
+
+}
+
+void printProgressBar(int percent) {
+    std::string bar;
+    char buf[16];
+    bar.push_back('\r');
+    bar.push_back('[');
+    for (int i = 0; i < percent >> 1; i++) {
+        bar.push_back('=');
+    }
+    bar.push_back('>');
+    for (int i = percent >> 1; i < 50; i++) {
+        bar.push_back(' ');
+    }
+    sprintf(buf, "]  %d%c", percent, '%');
+    bar += buf;
+    WHBLogPrintf(bar.c_str());
+    WHBLogConsoleDraw();
+}
 
 int main(int argc, char** argv)
 {
@@ -280,12 +301,20 @@ int main(int argc, char** argv)
     //!*******************************************************************
     //!                        Initialize FS                             *
     //!*******************************************************************
-    WHBLogPrint("Mount external USB");
+    WHBLogPrint("Mounting external USB (FAT32)");
     WHBLogConsoleDraw();
     if (f_mount(&fs, "", 0) != FR_OK) {
         WHBLogPrint("Mount failed! Press any key to exit");
         WHBLogConsoleDraw();
         waitForKey();
+        return -1;
+    }
+
+    WHBLogPrint("Mounting external USB (Wii U)");
+    WHBLogConsoleDraw();
+    if (mount_fs("storage_usb", fsaFdWiiU, NULL, "/vol/storage_usb01") < 0) {
+        WHBLogPrint("Mount failed! Press any key to exit");
+        WHBLogConsoleDraw();
         return -1;
     }
 
@@ -320,6 +349,9 @@ int main(int argc, char** argv)
 
     VPADStatus status;
     VPADReadError error;
+
+    int i = 0;
+    printProgressBar(i);
     while (WHBProcIsRunning()) {
         // Read button, touch and sensor data from the Gamepad
         VPADRead(VPAD_CHAN_0, &status, 1, &error);
@@ -351,6 +383,9 @@ int main(int argc, char** argv)
             }
         }
 
+        if (status.trigger & VPAD_BUTTON_A) {
+            printProgressBar(++i);
+        }
         if (status.trigger & VPAD_BUTTON_B) {
             break;
         }
@@ -359,6 +394,11 @@ int main(int argc, char** argv)
         }
         WHBLogConsoleDraw();
     }
+
+    WHBLogPrint("Unmounting external USB (Wii U)");
+    WHBLogConsoleDraw();
+    unmount_fs("storage_usb");
+    IOSUHAX_FSA_FlushVolume(fsaFdWiiU, "/vol/storage_usb01");
 
     WHBLogConsoleFree();
     WHBLogUdpDeinit();
