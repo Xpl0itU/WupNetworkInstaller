@@ -6,11 +6,8 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
-      - name: List files in the repository
-        run: |
-          ls ${{ github.workspace }}
       - name: Run cmake/devkitppc
-        run: docker run --rm -v ${{ github.workspace }}:/developer devkitpro/devkitppc:latest sh -c "mkdir /developer/build && cd /developer/build && cmake .. && make"
+        run: docker run --rm -v ${{ github.workspace }}:/developer -v ${{ github.workspace}}/portlibs:/opt/devkitpro/ devkitpro/devkitppc:latest sh -c "mkdir /developer/build && cd /developer/build && /opt/devkitpro/portlibs/wiiu/bin/powerpc-eabi-cmake .. && make"
       - name: Generate release tag
         id: tag
         run: |
