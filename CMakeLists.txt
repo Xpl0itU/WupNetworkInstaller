@@ -5,7 +5,7 @@ include_directories(${DEVKITPRO}/portlibs/ppc/include)
 link_directories(${DEVKITPRO}/portlibs/ppc/lib)
 find_library(ZLIB NAMES z HINTS "${DEVKITPRO}/portlibs/ppc/lib")
 
-add_executable(wupnetworkinstaller main.cpp)
+add_executable(wupnetworkinstaller main.cpp Application.cpp)
 set_target_properties(wupnetworkinstaller PROPERTIES LINKER_LANGUAGE CXX)
 target_link_libraries(wupnetworkinstaller PRIVATE ${ZLIB})
 target_compile_options(wupnetworkinstaller PRIVATE -Wall)
