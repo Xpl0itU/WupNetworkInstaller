@@ -10,8 +10,6 @@ include_directories(${DEVKITPRO}/wut/include)
 link_directories(${DEVKITPRO}/wut/lib)
 include_directories(external/include)
 link_directories(external/lib)
-find_library(ZLIB NAMES z HINTS "${DEVKITPRO}/portlibs/ppc/lib")
-find_library(IOSUHAX NAMES iosuhax HINTS "${DEVKITPRO}/portlibs/wiiu/lib")
 
 add_executable(wupnetworkinstaller
 main.cpp
@@ -21,6 +19,6 @@ fatfs/ffsystem.c
 fatfs/ffunicode.c
 )
 set_target_properties(wupnetworkinstaller PROPERTIES LINKER_LANGUAGE CXX)
-target_link_libraries(wupnetworkinstaller PRIVATE ${ZLIB} "/developer/external/lib/libiosuhax.a")
+target_link_libraries(wupnetworkinstaller PRIVATE "${CMAKE_SOURCE_DIR}/external/lib/libiosuhax.a")
 target_compile_options(wupnetworkinstaller PRIVATE -Wall)
 wut_create_rpx(wupnetworkinstaller)
