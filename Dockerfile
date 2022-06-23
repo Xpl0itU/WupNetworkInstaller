@@ -1,7 +1,4 @@
-FROM devkitpro/devkitppc
+FROM wiiuenv/devkitppc:20220507
 
-# COPY --from=wiiulegacy/dynamic_libs:0.1 /artifacts $DEVKITPRO/portlibs
-COPY --from=wiiulegacy/libutils:0.1 /artifacts $DEVKITPRO/portlibs
-COPY --from=wiiulegacy/libfat:1.1.3a /artifacts $DEVKITPRO/portlibs
-RUN dkp-pacman -S --needed --noconfirm wiiu-dev
-RUN dkp-pacman -S --needed --noconfirm ppc-portlibs wiiu-portlibs
+# COPY --from=wiiuenv/libiosuhax:latest /artifacts $DEVKITPRO
+# RUN git clone https://github.com/Crementif/libiosuhax.git && cd libiosuhax && make && make install && cd ..

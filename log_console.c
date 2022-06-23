@@ -108,8 +108,9 @@ WHBLogConsoleDraw()
    OSScreenClearBufferEx(SCREEN_DRC, consoleColor);
 
    for (int y = 0; y < NUM_LINES; ++y) {
-      OSScreenPutFontEx(SCREEN_TV, 0, y, sConsoleBuffer[y]);
-      OSScreenPutFontEx(SCREEN_DRC, 0, y, sConsoleBuffer[y]);
+      int idx = (sConsoleBufferStart + y) % NUM_LINES;
+      OSScreenPutFontEx(SCREEN_TV, 0, y, sConsoleBuffer[idx]);
+      OSScreenPutFontEx(SCREEN_DRC, 0, y, sConsoleBuffer[idx]);
    }
 
    DCFlushRange(sBufferTV, sBufferSizeTV);

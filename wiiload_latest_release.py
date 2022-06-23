@@ -12,12 +12,18 @@ ip = "10.0.27.155"
 
 
 def main():
-    with urllib.request.urlopen("https://api.github.com/repos/wchill/WupNetworkInstaller/releases/latest") as response:
-        body = json.loads(response.read().decode("utf-8"))
-        rpx_url = body["assets"][0]["browser_download_url"]
+    if len(sys.argv) > 1:
+        print(f"Reading from {sys.argv[-1]}")
+        with open(sys.argv[-1], "rb") as f:
+            rpx_data = f.read()
+    else:
+        print("Fetching latest release from github")
+        with urllib.request.urlopen("https://api.github.com/repos/wchill/WupNetworkInstaller/releases/latest") as response:
+            body = json.loads(response.read().decode("utf-8"))
+            rpx_url = body["assets"][0]["browser_download_url"]
 
-    with urllib.request.urlopen(rpx_url) as response:
-        rpx_data = response.read()
+        with urllib.request.urlopen(rpx_url) as response:
+            rpx_data = response.read()
 
     wii_ip = (ip, 4299)
     

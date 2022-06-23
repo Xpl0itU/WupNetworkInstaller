@@ -240,6 +240,8 @@ venv.bak/
 # mkdocs documentation
 /site
 
+.vscode/
+
 # mypy
 .mypy_cache/
 .dmypy.json
