@@ -7,7 +7,7 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@v3
       - name: Run cmake/devkitppc
-        run: docker run --rm -v ${{ github.workspace }}:/developer -v ${{ github.workspace}}/portlibs:/opt/devkitpro/ devkitpro/devkitppc:latest sh -c "mkdir /developer/build && cd /developer/build && /opt/devkitpro/portlibs/wiiu/bin/powerpc-eabi-cmake .. && make"
+        run: docker run --rm -v ${{ github.workspace }}:/developer wiiulegacy/hbl_builder:latest sh -c "mkdir /developer/build && cd /developer/build && /opt/devkitpro/portlibs/wiiu/bin/powerpc-eabi-cmake .. && make"
       - name: Generate release tag
         id: tag
         run: |
