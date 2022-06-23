@@ -23,17 +23,22 @@
 #include <coreinit/memory.h>
 
 #include <whb/proc.h>
+#include <coreinit/memdefaultheap.h>
+#include <coreinit/filesystem.h>
 #include "os_functions.h"
 #include "fatfs/ff.h"
 
 #define MCP_COMMAND_INSTALL_ASYNC 0x81
 #define MAX_INSTALL_PATH_LENGTH     0x27F
 
+#define COPY_BUFFER_SZ 1024 * 1024 * 64
+
 
 static int installCompleted = 0;
 static uint32_t installError = 0;
 static FATFS fs;
 static int fsaFdWiiU = -1;
+static FSClient fsClient;
 
 
 int someFunc(IOSError err, int* arg)
@@ -253,30 +258,69 @@ void waitForKey() {
     }
 }
 
-bool copyFile(char *srcPath, char *dstPath) {
-    FIL fp;
-    if (f_open(&fp, srcPath, FA_READ) != F_OK) {
-        return false;
-    }
+void printProgressBar(uint64_t current, uint64_t total) {
+    int percent = (int) (current * 100.0f / total);
 
-}
-
-void printProgressBar(int percent) {
     std::string bar;
-    char buf[16];
+    char buf[64];
     bar.push_back('\r');
     bar.push_back('[');
-    for (int i = 0; i < percent >> 1; i++) {
+    int i;
+    for (i = 0; i < percent; i += 4) {
         bar.push_back('=');
     }
     bar.push_back('>');
-    for (int i = percent >> 1; i < 50; i++) {
+    for (; i < 100; i+= 4) {
         bar.push_back(' ');
     }
-    sprintf(buf, "]  %d%c", percent, '%');
+    sprintf(buf, "]  %d/%d (%d pct)", current, total, percent);
     bar += buf;
     WHBLogPrintf(bar.c_str());
     WHBLogConsoleDraw();
+}
+
+bool copyFile(char *src, char *dst, void *buffer, size_t buf_size) {
+    FIL fp;
+    FILINFO fi;
+    if (f_stat(src, &fi) != FR_OK) {
+        return false;
+    }
+
+    if (f_open(&fp, src, FA_READ) != F_OK) {
+        return false;
+    }
+
+    FSFileHandle handle;
+    FSCmdBlock cmd;
+    FSInitCmdBlock(&cmd);
+    int result = FSOpenFile(&fsClient, &cmd, dst, "w", &handle, FS_ERROR_FLAG_ALL);
+    if (result < 0) {
+        WHBLogPrintf("%s: FSOpenFile error %d", __FUNCTION__, result);
+        return false;
+    }
+
+    uint64_t bytes_copied = 0;
+    while (bytes_copied < fi.fsize) {
+        uint bytes_read = 0;
+        if (f_read(&fp, buffer, buf_size, &bytes_read) != FR_OK) {
+            return false;
+        }
+
+        uint bytes_written = 0;
+        while (bytes_written < bytes_read) {
+            FSInitCmdBlock(&cmd);
+
+            // FSStatus FSWriteFile( FSClient *client, FSCmdBlock *block, const void *source, FSSize size, FSCount count, FSFileHandle fileHandle, FSFlag flag, FSRetFlag errHandling );
+            FSStatus result = FSWriteFile(&fsClient, &cmd, (uint8_t*) buffer, 1, bytes_read, (FSFileHandle)handle, 0, FS_ERROR_FLAG_ALL);
+            if (result < 0) {
+                WHBLogPrintf("%s: FSWriteFile error %d", __FUNCTION__, result);
+                return 0;
+            }
+            bytes_written += result;
+            bytes_copied += result;
+            printProgressBar(bytes_copied, fi.fsize);
+        }
+    }
 }
 
 int main(int argc, char** argv)
@@ -298,6 +342,14 @@ int main(int argc, char** argv)
     WHBLogPrint("Initialize heap memory");
     WHBLogConsoleDraw();
 
+    void *copyBuffer = MEMAllocFromDefaultHeapEx(COPY_BUFFER_SZ, 64);
+    if (copyBuffer == nullptr) {
+        WHBLogPrint("Memory allocation failed! Press any key to exit");
+        WHBLogConsoleDraw();
+        waitForKey();
+        return -1;
+    }
+
     //!*******************************************************************
     //!                        Initialize FS                             *
     //!*******************************************************************
@@ -317,6 +369,12 @@ int main(int argc, char** argv)
         WHBLogConsoleDraw();
         return -1;
     }
+    FSInit();
+    if (FSAddClient(&fsClient, FS_ERROR_FLAG_ALL) != FS_STATUS_OK) {
+        WHBLogPrint("FSAddClient failed! Press any key to exit");
+        WHBLogConsoleDraw();
+        return -1;
+    }
 
     //!*******************************************************************
     //!                    Enter main application                        *
@@ -324,9 +382,19 @@ int main(int argc, char** argv)
     WHBLogPrint("Start main application");
     WHBLogConsoleDraw();
 
+    WHBLogPrintf("Copying file");
+    WHBLogConsoleDraw();
+    if (copyFile("/WUP-N-D43E_0005000244343345/0000000E.app", "/vol/storage_usb01/usr/tmp/0000000E.app", copyBuffer, COPY_BUFFER_SZ)) {
+        WHBLogPrintf("Copying file succeeded");
+        WHBLogConsoleDraw();
+    } else {
+        WHBLogPrintf("Copying file failed");
+        WHBLogConsoleDraw();
+    }
+
     //WUP-N-D43E_0005000244343345
     DIR dir;
-    if (f_opendir(&dir, "/") != FR_OK) {
+    if (f_opendir(&dir, "/WUP-N-D43E_0005000244343345") != FR_OK) {
         WHBLogPrint("opendir failed");
         WHBLogConsoleDraw();
     } else {
@@ -351,7 +419,6 @@ int main(int argc, char** argv)
     VPADReadError error;
 
     int i = 0;
-    printProgressBar(i);
     while (WHBProcIsRunning()) {
         // Read button, touch and sensor data from the Gamepad
         VPADRead(VPAD_CHAN_0, &status, 1, &error);
@@ -382,10 +449,6 @@ int main(int argc, char** argv)
                 break;
             }
         }
-
-        if (status.trigger & VPAD_BUTTON_A) {
-            printProgressBar(++i);
-        }
         if (status.trigger & VPAD_BUTTON_B) {
             break;
         }
@@ -397,8 +460,11 @@ int main(int argc, char** argv)
 
     WHBLogPrint("Unmounting external USB (Wii U)");
     WHBLogConsoleDraw();
+    FSDelClient(&fsClient, FS_ERROR_FLAG_ALL);
     unmount_fs("storage_usb");
     IOSUHAX_FSA_FlushVolume(fsaFdWiiU, "/vol/storage_usb01");
+
+    MEMFreeToDefaultHeap(copyBuffer);
 
     WHBLogConsoleFree();
     WHBLogUdpDeinit();
