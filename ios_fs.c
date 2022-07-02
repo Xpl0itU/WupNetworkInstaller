@@ -63,17 +63,19 @@ int cleanupFs() {
 }
 
 
-FSError FSA_Ioctl(FSClient *client, int ioctl, void *inbuf, uint32_t inLen, void *outBuf, uint32_t outLen) {
+FSError FSA_Ioctl(FSClient *client, int ioctl, void *in_buf, uint32_t in_len, void *out_buf, uint32_t out_len) {
     if (!client) {
         return FS_ERROR_INVALID_CLIENTHANDLE;
     }
 
     int handle = FSGetClientBody(client)->clientHandle;
-    return FSA_IoctlEx(handle, ioctl, inbuf, inLen, outBuf, outLen);
+    return FSA_IoctlEx(handle, ioctl, in_buf, in_len, out_buf, out_len);
 }
 
-FSError FSA_IoctlEx(int clientHandle, int ioctl, void *inbuf, uint32_t inLen, void *outBuf, uint32_t outLen) {
-    int ret = IOS_Ioctl(clientHandle, ioctl, inbuf, inLen, outBuf, outLen);
+FSError FSA_IoctlEx(int clientHandle, int ioctl, void *in_buf, uint32_t in_len, void *out_buf, uint32_t out_len) {
+    DCFlushRange(in_buf, in_len);
+    int ret = IOS_Ioctl(clientHandle, ioctl, in_buf, in_len, out_buf, out_len);
+    DCFlushRange(out_buf, out_len);
     return (FSError) ret;
 }
 
@@ -89,6 +91,7 @@ FSError FSA_Ioctlv(FSClient *client, uint32_t request, uint32_t vectorCountIn, u
 
 
 FSError FSA_IoctlvEx(int clientHandle, uint32_t request, uint32_t vectorCountIn, uint32_t vectorCountOut, IOSVec *vector) {
+    DCFlushRange(vector, sizeof(IOSVec) * (vectorCountIn + vectorCountOut));
     int ret = IOS_Ioctlv(clientHandle, request, vectorCountIn, vectorCountOut, vector);
     return (FSError) ret;
 }
@@ -135,13 +138,13 @@ int FSA_RawOpen(FSClient *client, const char *device_path, int *out_handle) {
     // https://github.com/wiiu-env/MochaPayload/blob/8015a18f24611c424e207b43176272fd04ea8440/source/ios_mcp/source/fsa.c#L342
     uint8_t *iobuf = alloc_iobuf();
 
-    uint32_t *inbuf = (uint32_t*) iobuf;
-    uint32_t *outbuf = (uint32_t*) &iobuf[0x520];
-    strncpy((char *) &inbuf[0x01], device_path, 0x27F);
+    uint32_t *in_buf = (uint32_t*) iobuf;
+    uint32_t *out_buf = (uint32_t*) &iobuf[0x520];
+    strncpy((char *) &in_buf[0x01], device_path, 0x27F);
 
-    int ret = FSA_Ioctl(client, 0x6A, inbuf, 0x520, outbuf, 0x293);
+    int ret = FSA_Ioctl(client, 0x6A, in_buf, 0x520, out_buf, 0x293);
 
-    if (out_handle) *out_handle = outbuf[1];
+    if (out_handle) *out_handle = out_buf[1];
     free(iobuf);
     return ret;
 }
@@ -151,12 +154,12 @@ int FSA_RawClose(FSClient *client, int deviceHandle) {
     // https://github.com/wiiu-env/MochaPayload/blob/8015a18f24611c424e207b43176272fd04ea8440/source/ios_mcp/source/fsa.c#L357
     uint8_t *iobuf = alloc_iobuf();
 
-    uint32_t *inbuf = (uint32_t*) iobuf;
-    uint32_t *outbuf = (uint32_t*) &iobuf[0x520];
+    uint32_t *in_buf = (uint32_t*) iobuf;
+    uint32_t *out_buf = (uint32_t*) &iobuf[0x520];
 
-    inbuf[1] = deviceHandle;
+    in_buf[1] = deviceHandle;
 
-    int ret = FSA_Ioctl(client, 0x6D, inbuf, 0x520, outbuf, 0x293);
+    int ret = FSA_Ioctl(client, 0x6D, in_buf, 0x520, out_buf, 0x293);
 
     free(iobuf);
     return ret;
@@ -168,27 +171,28 @@ int FSA_RawRead(FSClient *client, void *data, uint32_t size_bytes, uint32_t cnt,
     // https://github.com/wiiu-env/MochaPayload/blob/8015a18f24611c424e207b43176272fd04ea8440/source/ios_mcp/source/fsa.c#L371
     uint8_t *iobuf = alloc_iobuf();
 
-    uint32_t *inbuf = (uint32_t*) iobuf;
-    uint32_t *outbuf = (uint32_t*) &iobuf[0x520];
+    uint32_t *in_buf = (uint32_t*) iobuf;
+    uint32_t *out_buf = (uint32_t*) &iobuf[0x520];
     IOSVec *iovec = (IOSVec *) &iobuf[0x7C0];
 
     // note : offset_bytes = blocks_offset * size_bytes
-    inbuf[0x08 / 4] = (blocks_offset >> 32);
-    inbuf[0x0C / 4] = (blocks_offset & 0xFFFFFFFF);
-    inbuf[0x10 / 4] = cnt;
-    inbuf[0x14 / 4] = size_bytes;
-    inbuf[0x18 / 4] = device_handle;
+    in_buf[0x08 / 4] = (blocks_offset >> 32);
+    in_buf[0x0C / 4] = (blocks_offset & 0xFFFFFFFF);
+    in_buf[0x10 / 4] = cnt;
+    in_buf[0x14 / 4] = size_bytes;
+    in_buf[0x18 / 4] = device_handle;
 
-    iovec[0].vaddr = inbuf;
+    iovec[0].vaddr = in_buf;
     iovec[0].len = 0x520;
 
     iovec[1].vaddr = data;
     iovec[1].len = size_bytes * cnt;
 
-    iovec[2].vaddr = outbuf;
+    iovec[2].vaddr = out_buf;
     iovec[2].len = 0x293;
 
     int ret = FSA_Ioctlv(client, 0x6B, 1, 2, iovec);
+    DCFlushRange(data, size_bytes * cnt);
 
     free(iobuf);
     return ret;
@@ -199,26 +203,27 @@ int FSA_RawWrite(FSClient *client, const void *data, uint32_t size_bytes, uint32
     // https://github.com/wiiu-env/MochaPayload/blob/8015a18f24611c424e207b43176272fd04ea8440/source/ios_mcp/source/fsa.c#L401
     uint8_t *iobuf = alloc_iobuf();
 
-    uint32_t *inbuf = (uint32_t*) iobuf;
-    uint32_t *outbuf = (uint32_t*) &iobuf[0x520];
+    uint32_t *in_buf = (uint32_t*) iobuf;
+    uint32_t *out_buf = (uint32_t*) &iobuf[0x520];
     IOSVec *iovec = (IOSVec *) &iobuf[0x7C0];
 
     // note : offset_bytes = blocks_offset * size_bytes
-    inbuf[0x08 / 4] = (blocks_offset >> 32);
-    inbuf[0x0C / 4] = (blocks_offset & 0xFFFFFFFF);
-    inbuf[0x10 / 4] = cnt;
-    inbuf[0x14 / 4] = size_bytes;
-    inbuf[0x18 / 4] = device_handle;
+    in_buf[0x08 / 4] = (blocks_offset >> 32);
+    in_buf[0x0C / 4] = (blocks_offset & 0xFFFFFFFF);
+    in_buf[0x10 / 4] = cnt;
+    in_buf[0x14 / 4] = size_bytes;
+    in_buf[0x18 / 4] = device_handle;
 
-    iovec[0].vaddr = inbuf;
+    iovec[0].vaddr = in_buf;
     iovec[0].len = 0x520;
 
     iovec[1].vaddr = (void*) data;
     iovec[1].len = size_bytes * cnt;
 
-    iovec[2].vaddr = outbuf;
+    iovec[2].vaddr = out_buf;
     iovec[2].len = 0x293;
 
+    DCFlushRange(data, size_bytes * cnt);
     int ret = FSA_Ioctlv(client, 0x6C, 2, 1, iovec);
 
     free(iobuf);
@@ -228,12 +233,12 @@ int FSA_RawWrite(FSClient *client, const void *data, uint32_t size_bytes, uint32
 
 int FSA_FlushVolume(FSClient *client, const char *volume_path) {
     uint8_t *iobuf = alloc_iobuf();
-    uint32_t *inbuf  = (uint32_t *) iobuf;
-    uint32_t *outbuf = (uint32_t *) &iobuf[0x520];
+    uint32_t *in_buf  = (uint32_t *) iobuf;
+    uint32_t *out_buf = (uint32_t *) &iobuf[0x520];
 
-    strncpy((char *) &inbuf[0x01], volume_path, 0x27F);
+    strncpy((char *) &in_buf[0x01], volume_path, 0x27F);
 
-    int ret = FSA_Ioctl(client, 0x1B, inbuf, 0x520, outbuf, 0x293);
+    int ret = FSA_Ioctl(client, 0x1B, in_buf, 0x520, out_buf, 0x293);
 
     free(iobuf);
     return ret;
@@ -245,13 +250,13 @@ int FSA_FlushVolume(FSClient *client, const char *volume_path) {
 // 		0x10 : device sector size (u32)
 int FSA_GetDeviceInfo(FSClient *client, const char *device_path, int type, void *out_data) {
     uint8_t *iobuf = alloc_iobuf();
-    uint32_t *inbuf  = (uint32_t *) iobuf;
-    uint32_t *outbuf = (uint32_t *) &iobuf[0x520];
+    uint32_t *in_buf  = (uint32_t *) iobuf;
+    uint32_t *out_buf = (uint32_t *) &iobuf[0x520];
 
-    strncpy((char *) &inbuf[0x01], device_path, 0x27F);
-    inbuf[0x284 / 4] = type;
+    strncpy((char *) &in_buf[0x01], device_path, 0x27F);
+    in_buf[0x284 / 4] = type;
 
-    int ret = FSA_Ioctl(client, 0x18, inbuf, 0x520, outbuf, 0x293);
+    int ret = FSA_Ioctl(client, 0x18, in_buf, 0x520, out_buf, 0x293);
 
     int size = 0;
 
@@ -279,7 +284,7 @@ int FSA_GetDeviceInfo(FSClient *client, const char *device_path, int type, void 
             break;
     }
 
-    memcpy(out_data, &outbuf[1], size);
+    memcpy(out_data, &out_buf[1], size);
 
     free(iobuf);
     return ret;
