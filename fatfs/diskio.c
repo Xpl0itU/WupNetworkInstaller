@@ -24,9 +24,6 @@
 
 static int deviceFds[] = {-1, -1};
 static const char *devicePaths[] = {SD_PATH, USB_EXT_PATH};
-
-
-static int usbFd = -1;
 static FSClient fsClient;
 
 
@@ -60,9 +57,9 @@ DSTATUS disk_initialize (
 		return STA_NOINIT;
 	}
 
-	int res = FSA_RawOpen(&fsClient, USB_PATH, &deviceFds[pdrv]);
+	int res = FSA_RawOpen(&fsClient, devicePaths[pdrv], &deviceFds[pdrv]);
 	if (res < 0) return STA_NOINIT;
-	if (usbFd < 0) return STA_NOINIT;
+	if (deviceFds[pdrv] < 0) return STA_NOINIT;
 
 	return 0;
 }
@@ -82,7 +79,7 @@ DRESULT disk_read (
 {
 	if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
 	// sector size 512 bytes
-	if (usbFd < 0) return RES_NOTRDY;
+	if (deviceFds[pdrv] < 0) return RES_NOTRDY;
 	int res = FSA_RawRead(&fsClient, buff, 512, count, sector, deviceFds[pdrv]);
     if (res < 0) return RES_ERROR;
 
