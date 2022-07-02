@@ -10,15 +10,21 @@
 #include "ff.h"			/* Obtains integer types */
 #include "diskio.h"		/* Declarations of disk functions */
 #include <iosuhax.h>
+#include <coreinit/filesystem.h>
+#include <coreinit/time.h>
+#include "../ios_fs.h"
 
 /* Definitions of physical drive number for each drive */
 // #define DEV_RAM		0	/* Example: Map Ramdisk to physical drive 0 */
 // #define DEV_MMC		1	/* Example: Map MMC/SD card to physical drive 1 */
 #define DEV_USB		0	/* Example: Map USB MSD to physical drive 2 */
 
+#define USB_PATH	"/dev/usb02"
+
 
 static int fsaFdUsb = -1;
 static int usbFd = -1;
+static FSClient fsClient;
 
 
 /*-----------------------------------------------------------------------*/
@@ -45,33 +51,12 @@ DSTATUS disk_initialize (
 	BYTE pdrv				/* Physical drive number to identify the drive */
 )
 {
-	// close so we can reinitialize if needed
-	if (usbFd >= 0) {
-		IOSUHAX_FSA_RawClose(fsaFdUsb, usbFd);
-		usbFd = -1;
-	}
-	if (fsaFdUsb >= 0) {
-		IOSUHAX_FSA_Close(fsaFdUsb);
-		fsaFdUsb = -1;
-		IOSUHAX_Close();
-	}
-
-	if (IOSUHAX_Open(NULL) < 0)
-        return STA_NOINIT;
-
-	fsaFdUsb = IOSUHAX_FSA_Open();
-	if (fsaFdUsb < 0) {
-		IOSUHAX_Close();
+	if (initFs(&fsClient) < 0) {
 		return STA_NOINIT;
 	}
 
-	int res = IOSUHAX_FSA_RawOpen(fsaFdUsb, "/dev/usb02", &usbFd);
-	if (res < 0) {
-		IOSUHAX_FSA_Close(fsaFdUsb);
-		IOSUHAX_Close();
-		return STA_NOINIT;
-	}
-
+	int res = FSA_RawOpen(&fsClient, USB_PATH, &usbFd);
+	if (res < 0) return STA_NOINIT;
 	if (usbFd < 0) return STA_NOINIT;
 
 	return 0;
@@ -90,14 +75,10 @@ DRESULT disk_read (
 	UINT count		/* Number of sectors to read */
 )
 {
-	int result;
-
 	// sector size 512 bytes
-	if (fsaFdUsb < 0 || usbFd < 0) return RES_NOTRDY;
-	int res = IOSUHAX_FSA_RawRead(fsaFdUsb, buff, 512, count, sector, usbFd);
-    if (res < 0) {
-        return RES_ERROR;
-    }
+	if (usbFd < 0) return RES_NOTRDY;
+	int res = FSA_RawRead(&fsClient, buff, 512, count, sector, usbFd);
+    if (res < 0) return RES_ERROR;
 
 	return RES_OK;
 }
@@ -117,39 +98,11 @@ DRESULT disk_write (
 	UINT count			/* Number of sectors to write */
 )
 {
-	DRESULT res;
-	int result;
+	if (usbFd < 0) return RES_NOTRDY;
+	int res = FSA_RawWrite(&fsClient, (const void*) buff, 512, count, sector, usbFd);
+    if (res < 0) return RES_ERROR;
 
-	switch (pdrv) {
-	case DEV_RAM :
-		// translate the arguments here
-
-		result = RAM_disk_write(buff, sector, count);
-
-		// translate the reslut code here
-
-		return res;
-
-	case DEV_MMC :
-		// translate the arguments here
-
-		result = MMC_disk_write(buff, sector, count);
-
-		// translate the reslut code here
-
-		return res;
-
-	case DEV_USB :
-		// translate the arguments here
-
-		result = USB_disk_write(buff, sector, count);
-
-		// translate the reslut code here
-
-		return res;
-	}
-
-	return RES_PARERR;
+	return RES_OK;
 }
 
 #endif
@@ -165,9 +118,43 @@ DRESULT disk_ioctl (
 	void *buff		/* Buffer to send/receive control data */
 )
 {
-	DRESULT res;
-	int result;
+	int res;
+	uint8_t ioctl_buf[0x28];
+
+	if (usbFd < 0) return RES_NOTRDY;
+
+	switch (cmd) {
+		case CTRL_SYNC:
+			res = FSA_FlushVolume(&fsClient, USB_PATH);
+			if (res) return RES_ERROR;
+			return RES_OK;
+		case GET_SECTOR_COUNT:
+			res = FSA_GetDeviceInfo(&fsClient, USB_PATH, 0x08, ioctl_buf);
+			if (res) return RES_ERROR;
+			*(LBA_t*)buff = *(uint64_t*)&ioctl_buf[0x08];
+			return RES_OK;
+		case GET_SECTOR_SIZE:
+			res = FSA_GetDeviceInfo(&fsClient, USB_PATH, 0x08, ioctl_buf);
+			if (res) return RES_ERROR;
+			*(WORD*)buff = *(uint32_t*)&ioctl_buf[0x10];
+			return RES_OK;
+		case GET_BLOCK_SIZE:
+			*(WORD*)buff = 1;
+			return RES_OK;
+		case CTRL_TRIM:
+			return RES_OK;
+	}
 
 	return RES_PARERR;
 }
 
+DWORD get_fattime() {
+	OSCalendarTime output;
+	OSTicksToCalendarTime(OSGetTime(), &output);
+	return (DWORD)(output.tm_year - 1980) << 25 |
+		(DWORD)(output.tm_mon + 1) << 21 |
+		(DWORD)output.tm_mday << 16 |
+		(DWORD)output.tm_hour << 11 |
+		(DWORD)output.tm_min << 5 |
+		(DWORD)output.tm_sec >> 1;
+}
