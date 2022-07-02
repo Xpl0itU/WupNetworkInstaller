@@ -15,14 +15,17 @@
 #include "../ios_fs.h"
 
 /* Definitions of physical drive number for each drive */
-// #define DEV_RAM		0	/* Example: Map Ramdisk to physical drive 0 */
-// #define DEV_MMC		1	/* Example: Map MMC/SD card to physical drive 1 */
-#define DEV_USB		0	/* Example: Map USB MSD to physical drive 2 */
+#define DEV_SD		0
+#define DEV_USB_EXT 1
 
-#define USB_PATH	"/dev/usb02"
+#define SD_PATH		"/dev/sdcard01"
+#define USB_EXT_PATH	"/dev/usb02"
 
 
-static int fsaFdUsb = -1;
+static int deviceFds[] = {-1, -1};
+static const char *devicePaths[] = {SD_PATH, USB_EXT_PATH};
+
+
 static int usbFd = -1;
 static FSClient fsClient;
 
@@ -35,7 +38,8 @@ DSTATUS disk_status (
 	BYTE pdrv		/* Physical drive number to identify the drive */
 )
 {
-	if (fsaFdUsb < 0 || usbFd < 0) {
+	if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
+	if (deviceFds[pdrv] < 0) {
 		return STA_NOINIT;
 	}
 	return 0;
@@ -51,11 +55,12 @@ DSTATUS disk_initialize (
 	BYTE pdrv				/* Physical drive number to identify the drive */
 )
 {
+	if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
 	if (initFs(&fsClient) < 0) {
 		return STA_NOINIT;
 	}
 
-	int res = FSA_RawOpen(&fsClient, USB_PATH, &usbFd);
+	int res = FSA_RawOpen(&fsClient, USB_PATH, &deviceFds[pdrv]);
 	if (res < 0) return STA_NOINIT;
 	if (usbFd < 0) return STA_NOINIT;
 
@@ -75,9 +80,10 @@ DRESULT disk_read (
 	UINT count		/* Number of sectors to read */
 )
 {
+	if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
 	// sector size 512 bytes
 	if (usbFd < 0) return RES_NOTRDY;
-	int res = FSA_RawRead(&fsClient, buff, 512, count, sector, usbFd);
+	int res = FSA_RawRead(&fsClient, buff, 512, count, sector, deviceFds[pdrv]);
     if (res < 0) return RES_ERROR;
 
 	return RES_OK;
@@ -98,8 +104,9 @@ DRESULT disk_write (
 	UINT count			/* Number of sectors to write */
 )
 {
-	if (usbFd < 0) return RES_NOTRDY;
-	int res = FSA_RawWrite(&fsClient, (const void*) buff, 512, count, sector, usbFd);
+	if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
+	if (deviceFds[pdrv] < 0) return RES_NOTRDY;
+	int res = FSA_RawWrite(&fsClient, (const void*) buff, 512, count, sector, deviceFds[pdrv]);
     if (res < 0) return RES_ERROR;
 
 	return RES_OK;
@@ -118,23 +125,25 @@ DRESULT disk_ioctl (
 	void *buff		/* Buffer to send/receive control data */
 )
 {
+	if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
 	int res;
 	uint8_t ioctl_buf[0x28];
 
-	if (usbFd < 0) return RES_NOTRDY;
+	if (deviceFds[pdrv] < 0) return RES_NOTRDY;
+	const char *devicePath = devicePaths[pdrv];
 
 	switch (cmd) {
 		case CTRL_SYNC:
-			res = FSA_FlushVolume(&fsClient, USB_PATH);
+			res = FSA_FlushVolume(&fsClient, devicePath);
 			if (res) return RES_ERROR;
 			return RES_OK;
 		case GET_SECTOR_COUNT:
-			res = FSA_GetDeviceInfo(&fsClient, USB_PATH, 0x08, ioctl_buf);
+			res = FSA_GetDeviceInfo(&fsClient, devicePath, 0x08, ioctl_buf);
 			if (res) return RES_ERROR;
 			*(LBA_t*)buff = *(uint64_t*)&ioctl_buf[0x08];
 			return RES_OK;
 		case GET_SECTOR_SIZE:
-			res = FSA_GetDeviceInfo(&fsClient, USB_PATH, 0x08, ioctl_buf);
+			res = FSA_GetDeviceInfo(&fsClient, devicePath, 0x08, ioctl_buf);
 			if (res) return RES_ERROR;
 			*(WORD*)buff = *(uint32_t*)&ioctl_buf[0x10];
 			return RES_OK;

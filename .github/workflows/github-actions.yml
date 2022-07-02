@@ -13,7 +13,7 @@ jobs:
           push: false
           tags: wup_build
       - name: Run cmake/devkitppc
-        run: docker run --rm -v ${{ github.workspace }}:/developer wup_build sh -c "mkdir -p /developer/build && cd /developer/build && /opt/devkitpro/portlibs/wiiu/bin/powerpc-eabi-cmake .. && make"
+        run: git submodule init && git submodule update && docker run --rm -v ${{ github.workspace }}:/developer wup_build sh -c "mkdir -p /developer/build && cd /developer/build && /opt/devkitpro/portlibs/wiiu/bin/powerpc-eabi-cmake .. && make"
       - name: Generate release tag
         id: tag
         run: echo "::set-output name=release_tag::alpha_$(date +"%Y%m%d%H%M")_$(git rev-parse --short "$GITHUB_SHA")"
