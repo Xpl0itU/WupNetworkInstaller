@@ -8,7 +8,7 @@ import struct
 import urllib.request
 
 
-ip = "10.0.27.155"
+ip = "192.168.1.24"
 
 
 def main():

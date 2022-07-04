@@ -21,7 +21,7 @@
 
 #include <whb/proc.h>
 #include <coreinit/memdefaultheap.h>
-#include <iosuhax.h>
+#include <mocha/mocha.h>
 #include "os_functions.h"
 #include "fatfs/ff.h"
 #include "utils.h"
@@ -225,8 +225,9 @@ int main(int argc, char** argv)
     WHBLogConsoleInit();
     WHBLogUdpInit();
     WHBLogConsoleSetColor(0);
-    WHBLogPrint("Starting WUP Network Installer");
-    WHBLogConsoleDraw();
+    //WHBLogPrint("Starting WUP Network Installer");
+    //WHBLogConsoleDraw();
+    Mocha_InitLibrary();
 
     //!*******************************************************************
     //!                    Initialize heap memory                        *
@@ -242,40 +243,51 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    json object = {{"one", 1}, {"two", 2}};
-    WHBLogPrint(object.dump().c_str());
-    WHBLogConsoleDraw();
+    //json object = {{"one", 1}, {"two", 2}};
+    //WHBLogPrint(object.dump().c_str());
+    //WHBLogConsoleDraw();
 
     //!*******************************************************************
     //!                        Initialize FS                             *
     //!*******************************************************************
-    WHBLogPrint("Open handle to /dev/iosuhax");
-    WHBLogConsoleDraw();
-    if (IOSUHAX_Open(NULL) < 0) {
-        WHBLogPrint("Opening iosuhax failed! Press any key to exit");
-        WHBLogConsoleDraw();
-        waitForKey();
-        return returncode;
-    }
 
-    WHBLogPrint("Mounting external USB (FAT32/Wii U)");
+    WHBLogPrint("Mounting SD");
     WHBLogConsoleDraw();
     // returncode = initFs();
-    if (returncode < 0) {
-        WHBLogPrint("Mount failed! Press any key to exit");
-        WHBLogConsoleDraw();
-        waitForKey();
-        return returncode;
-    }
 
     //!*******************************************************************
     //!                    Enter main application                        *
     //!*******************************************************************
-    WHBLogPrint("Start main application");
-    WHBLogConsoleDraw();
+    //WHBLogPrint("Start main application");
+    //WHBLogConsoleDraw();
 
-    WHBLogPrintf("Copying file");
+    FSClient *client = initFs();
+    returncode = mountExternalFat32Disk();
+    if (returncode != 0) {
+        WHBLogPrintf("Mount sd card failed %d! Press any key to exit", returncode);
+        WHBLogConsoleDraw();
+        waitForKey();
+        return returncode;
+    }
+    WHBLogPrint("Mount done");
     WHBLogConsoleDraw();
+    std::vector<std::string> files;
+    std::vector<std::string> folders;
+    if (!enumerateFatFsDirectory("0:/", &files, &folders)) {
+        WHBLogPrint("Enumerate sd card failed!");
+        WHBLogConsoleDraw();
+    } else {
+        WHBLogPrint("Enumerating sd card");
+        WHBLogConsoleDraw();
+        for (const auto &f : files) {
+            WHBLogPrintf("> %s", f.c_str());
+            WHBLogConsoleDraw();
+            waitForKey();
+        }
+        WHBLogPrint("Done");
+        WHBLogConsoleDraw();
+        waitForKey();
+    }
 
     /*
     if (copyFolder("/WUP-N-D43E_0005000244343345", "/vol/storage_usb01/usr/tmp/WUP-N-D43E_0005000244343345", copyBuffer, COPY_BUFFER_SZ)) {
@@ -290,9 +302,11 @@ int main(int argc, char** argv)
     }
     */
 
+   /*
         WHBLogPrintf("Installing");
         WHBLogConsoleDraw();
         install("/vol/storage_usb01/usr/tmp/WUP-N-D43E_0005000244343345");
+    */
 
     //WUP-N-D43E_0005000244343345
     /*
@@ -361,8 +375,8 @@ int main(int argc, char** argv)
         WHBLogConsoleDraw();
     }
 
-    WHBLogPrint("Unmounting external USB (Wii U)");
-    WHBLogConsoleDraw();
+    //WHBLogPrint("Unmounting external USB (Wii U)");
+    //WHBLogConsoleDraw();
     cleanupFs();
 
     MEMFreeToDefaultHeap(copyBuffer);

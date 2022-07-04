@@ -5,13 +5,12 @@
 #include <whb/log.h>
 #include <whb/log_console.h>
 #include <coreinit/filesystem.h>
-#include <iosuhax.h>
-#include <iosuhax_disc_interface.h>
 #include <stdlib.h>
 #include "fatfs/ff.h"
 #include "fs.h"
 #include "utils.h"
 #include "ios_fs.h"
+#include "mocha/fsa.h"
 
 
 static FATFS fs;
@@ -61,43 +60,45 @@ static int translate_error(FSStatus error)
 
 
 int mountExternalFat32Disk() {
-    if (f_mount(&fs, "", 0) != FR_OK) {
-        return -1;
-    }
-    return 0;
+    int res = f_mount(&fs, "0", 1);
+    return res;
 }
 
 
-int mountWiiUDisk() {
-    /*
+bool mountWiiUDisk() {
+    if (FSAE)
     if (mount_fs("storage_usb", fsaFdWiiU, NULL, "/vol/storage_usb01") < 0) {
         WHBLogPrint("Mount failed! Press any key to exit");
         WHBLogConsoleDraw();
         return -1;
     }
+    /*
     if (mount_fs("sd", fsaFdSd, NULL, "/vol/storage_external01") < 0) {
         WHBLogPrint("Mount failed! Press any key to exit");
         WHBLogConsoleDraw();
         return -1;
     }
     */
-    return 0;
+    return true;
 }
 
 
 bool enumerateFatFsDirectory(const char *path, std::vector<std::string> *files, std::vector<std::string> *folders) {
     if (files == nullptr || folders == nullptr) {
+        WHBLogPrint("vectors null");
         return false;
     }
 
     DIR dir;
     if (f_opendir(&dir, path) != FR_OK) {
+        WHBLogPrint("fopendir fail");
         return false;
     } else {
         std::string base_path = path;
         FILINFO fi;
         while (true) {
             if (f_readdir(&dir, &fi) != FR_OK) {
+                WHBLogPrint("freaddir fail");
                 return false;
             }
             if (fi.fname[0] == 0) break;
@@ -114,8 +115,7 @@ bool enumerateFatFsDirectory(const char *path, std::vector<std::string> *files, 
 }
 
 bool copyFolder(const char *src, const char *dst, void *buffer, size_t buf_size) {
-    FSClient fsClient;
-    initFs(&fsClient);
+    FSClient *fsClient = initFs();
 
     WHBLogPrintf("Copying folder %s -> %s", src, dst);
     WHBLogConsoleDraw();
@@ -140,7 +140,7 @@ bool copyFolder(const char *src, const char *dst, void *buffer, size_t buf_size)
     FSStatus status;
     FSCmdBlock cmd;
     FSInitCmdBlock(&cmd);
-    status = FSMakeDir(&fsClient, &cmd, dst, FS_ERROR_FLAG_ALL);
+    status = FSMakeDir(fsClient, &cmd, dst, FS_ERROR_FLAG_ALL);
     if (status < 0) {
         int err = translate_error(status);
         if (err != EEXIST) return false;
@@ -174,8 +174,7 @@ bool copyFolder(const char *src, const char *dst, void *buffer, size_t buf_size)
 }
 
 bool copyFile(const char *src, const char *dst, void *buffer, size_t buf_size) {
-    FSClient fsClient;
-    initFs(&fsClient);
+    FSClient *fsClient = initFs();
     
     WHBLogPrintf("Copying file %s -> %s", src, dst);
     WHBLogConsoleDraw();
@@ -192,7 +191,7 @@ bool copyFile(const char *src, const char *dst, void *buffer, size_t buf_size) {
     FSFileHandle handle;
     FSCmdBlock cmd;
     FSInitCmdBlock(&cmd);
-    int result = FSOpenFile(&fsClient, &cmd, dst, "w", &handle, FS_ERROR_FLAG_ALL);
+    int result = FSOpenFile(fsClient, &cmd, dst, "w", &handle, FS_ERROR_FLAG_ALL);
     if (result < 0) {
         WHBLogPrintf("%s: FSOpenFile error %d", __FUNCTION__, result);
         return false;
@@ -210,7 +209,7 @@ bool copyFile(const char *src, const char *dst, void *buffer, size_t buf_size) {
             FSInitCmdBlock(&cmd);
 
             // FSStatus FSWriteFile( FSClient *client, FSCmdBlock *block, const void *source, FSSize size, FSCount count, FSFileHandle fileHandle, FSFlag flag, FSRetFlag errHandling );
-            FSStatus result = FSWriteFile(&fsClient, &cmd, (uint8_t*) buffer, 1, bytes_read, (FSFileHandle)handle, 0, FS_ERROR_FLAG_ALL);
+            FSStatus result = FSWriteFile(fsClient, &cmd, (uint8_t*) buffer, 1, bytes_read, (FSFileHandle)handle, 0, FS_ERROR_FLAG_ALL);
             if (result < 0) {
                 WHBLogPrintf("%s: FSWriteFile error %d", __FUNCTION__, result);
                 return 0;

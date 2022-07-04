@@ -16,7 +16,7 @@ RUN mkdir -p /usr/share/man/man1 /usr/share/man/man2 && \
  apt-get clean && rm -rf /var/lib/apt/lists/* /usr/share/man
 
 # Install wut
-RUN git clone -b lto --single-branch https://github.com/V10lator/wut && \
+RUN git clone --single-branch https://github.com/devkitPro/wut && \
  cd wut && \
  make -j$(nproc) && \
  make install && \
@@ -112,13 +112,13 @@ PKG_CONFIG=$DEVKITPRO/portlibs/wiiu/bin/powerpc-eabi-pkg-config && \
  cd ../.. && \
  rm -rf curl
 
-# Install libiosuhax
-RUN git clone --recursive https://github.com/V10lator/libiosuhax -b ppc --single-branch  && \
- cd libiosuhax && \
+# Install libmocha
+RUN git clone --recursive https://github.com/wiiu-env/libmocha -b devoptab --single-branch  && \
+ cd libmocha && \
  make -j$(nproc) && \
  make install && \
  cd .. && \
- rm -rf libiosuhax
+ rm -rf libmocha
 
 # Install libromfs-wiiu
 RUN git clone --recursive https://github.com/yawut/libromfs-wiiu --single-branch && \

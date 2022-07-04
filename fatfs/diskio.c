@@ -9,7 +9,7 @@
 
 #include "ff.h"			/* Obtains integer types */
 #include "diskio.h"		/* Declarations of disk functions */
-#include <iosuhax.h>
+#include <mocha/fsa.h>
 #include <coreinit/filesystem.h>
 #include <coreinit/time.h>
 #include "../ios_fs.h"
@@ -24,7 +24,7 @@
 
 static int deviceFds[] = {-1, -1};
 static const char *devicePaths[] = {SD_PATH, USB_EXT_PATH};
-static FSClient fsClient;
+static FSClient *fsClient;
 
 
 /*-----------------------------------------------------------------------*/
@@ -53,11 +53,12 @@ DSTATUS disk_initialize (
 )
 {
 	if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
-	if (initFs(&fsClient) < 0) {
+	fsClient = initFs();
+	if (fsClient == NULL) {
 		return STA_NOINIT;
 	}
 
-	int res = FSA_RawOpen(&fsClient, devicePaths[pdrv], &deviceFds[pdrv]);
+	int res = FSAEx_RawOpen(fsClient, devicePaths[pdrv], &deviceFds[pdrv]);
 	if (res < 0) return STA_NOINIT;
 	if (deviceFds[pdrv] < 0) return STA_NOINIT;
 
@@ -80,7 +81,7 @@ DRESULT disk_read (
 	if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
 	// sector size 512 bytes
 	if (deviceFds[pdrv] < 0) return RES_NOTRDY;
-	int res = FSA_RawRead(&fsClient, buff, 512, count, sector, deviceFds[pdrv]);
+	int res = FSAEx_RawRead(fsClient, buff, 512, count, sector, deviceFds[pdrv]);
     if (res < 0) return RES_ERROR;
 
 	return RES_OK;
@@ -103,7 +104,7 @@ DRESULT disk_write (
 {
 	if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
 	if (deviceFds[pdrv] < 0) return RES_NOTRDY;
-	int res = FSA_RawWrite(&fsClient, (const void*) buff, 512, count, sector, deviceFds[pdrv]);
+	int res = FSAEx_RawWrite(fsClient, (const void*) buff, 512, count, sector, deviceFds[pdrv]);
     if (res < 0) return RES_ERROR;
 
 	return RES_OK;
@@ -131,16 +132,16 @@ DRESULT disk_ioctl (
 
 	switch (cmd) {
 		case CTRL_SYNC:
-			res = FSA_FlushVolume(&fsClient, devicePath);
+			res = FSAEx_FlushVolume(fsClient, devicePath);
 			if (res) return RES_ERROR;
 			return RES_OK;
 		case GET_SECTOR_COUNT:
-			res = FSA_GetDeviceInfo(&fsClient, devicePath, 0x08, ioctl_buf);
+			res = FSAEx_GetDeviceInfo(fsClient, devicePath, 0x4, ioctl_buf);
 			if (res) return RES_ERROR;
 			*(LBA_t*)buff = *(uint64_t*)&ioctl_buf[0x08];
 			return RES_OK;
 		case GET_SECTOR_SIZE:
-			res = FSA_GetDeviceInfo(&fsClient, devicePath, 0x08, ioctl_buf);
+			res = FSAEx_GetDeviceInfo(fsClient, devicePath, 0x4, ioctl_buf);
 			if (res) return RES_ERROR;
 			*(WORD*)buff = *(uint32_t*)&ioctl_buf[0x10];
 			return RES_OK;

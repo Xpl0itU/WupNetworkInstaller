@@ -11,7 +11,7 @@ link_directories(${DEVKITPRO}/portlibs/wiiu/lib)
 
 add_subdirectory(nlohmann_json)
 find_package( CURL REQUIRED )
-find_library( LIBIOSUHAX iosuhax REQUIRED HINTS "${DEVKITPRO}/wut/usr/lib" )
+find_library( LIBMOCHA mocha REQUIRED HINTS "${DEVKITPRO}/wut/usr/lib" )
 
 add_executable(wupnetworkinstaller
 main.cpp
@@ -26,7 +26,7 @@ fatfs/ffunicode.c
 set_target_properties(wupnetworkinstaller PROPERTIES LINKER_LANGUAGE CXX)
 set_target_properties(wupnetworkinstaller PROPERTIES CXX_STANDARD_REQUIRED ON)
 target_include_directories(wupnetworkinstaller PRIVATE "${DEVKITPRO}/wut/usr/include")
-target_link_libraries(wupnetworkinstaller PRIVATE "${LIBIOSUHAX}" CURL::libcurl nlohmann_json::nlohmann_json)
+target_link_libraries(wupnetworkinstaller PRIVATE "${LIBMOCHA}" CURL::libcurl nlohmann_json::nlohmann_json)
 target_compile_features(wupnetworkinstaller PRIVATE cxx_std_11)
 target_compile_options(wupnetworkinstaller PRIVATE -Wall)
 wut_create_rpx(wupnetworkinstaller)

@@ -1,11 +1,12 @@
 #include "ios_fs.h"
+#include <coreinit/cache.h>
 #include <coreinit/filesystem.h>
 #include <string.h>
 #include <stdlib.h>
 #include <malloc.h>
 #include <whb/log.h>
 #include <whb/log_console.h>
-#include <iosuhax.h>
+#include <mocha/mocha.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -14,46 +15,32 @@ extern "C" {
 static FSClient fsClient;
 static bool initialized = false;
 
-static uint8_t *alloc_iobuf() {
-    uint8_t *iobuf = (uint8_t*) memalign(0x40, 0x828);
-    memset(iobuf, 0, 0x828);
-    return iobuf;
-}
-
-int initFs(FSClient *outClient) {
+FSClient *initFs() {
     if (initialized) {
-        if (outClient) {
-            *outClient = fsClient;
-        }
-        return 0;
+        return &fsClient;
     }
 
+    WHBLogPrint("FSInit()");
+    WHBLogConsoleDraw();
     FSInit();
-    if (IOSUHAX_Open(NULL) < 0) {
-        WHBLogPrint("IOSUHAX failed! Press any key to exit");
-        WHBLogConsoleDraw();
-        return -1;
-    }
+    WHBLogPrint("FSAddClient()");
+    WHBLogConsoleDraw();
     if (FSAddClient(&fsClient, FS_ERROR_FLAG_ALL) != FS_STATUS_OK) {
         WHBLogPrint("FSAddClient failed! Press any key to exit");
         WHBLogConsoleDraw();
-        return -1;
+        return NULL;
     }
-    int returncode = IOSUHAX_UnlockFSClient(&fsClient);
-    if (returncode < 0) return returncode;
+    WHBLogPrint("Mocha_UnlockFSClient()");
+    WHBLogConsoleDraw();
+    int returncode = Mocha_UnlockFSClient(&fsClient);
+    if (returncode < 0) {
+        WHBLogPrintf("UnlockFSClient failed %d! Press any key to exit", returncode);
+        WHBLogConsoleDraw();
+        return NULL;
+    }
 
-/*
-    returncode = mountWiiUDisk();
-    if (returncode < 0) return returncode;
-
-    returncode = mountExternalFat32Disk();
-    if (returncode < 0) return returncode;
-*/
     initialized = true;
-    if (outClient) {
-        *outClient = fsClient;
-    }
-    return 0;
+    return &fsClient;
 }
 
 int cleanupFs() {
@@ -73,9 +60,16 @@ FSError FSA_Ioctl(FSClient *client, int ioctl, void *in_buf, uint32_t in_len, vo
 }
 
 FSError FSA_IoctlEx(int clientHandle, int ioctl, void *in_buf, uint32_t in_len, void *out_buf, uint32_t out_len) {
-    DCFlushRange(in_buf, in_len);
+    WHBLogPrintf("ioctl %d", ioctl);
+    WHBLogPrintf("clientHandle %d", clientHandle);
+    WHBLogPrintf("in_buf %p", in_buf);
+    WHBLogPrintf("in_len %u", in_len);
+    WHBLogPrintf("out_buf %p", out_buf);
+    WHBLogPrintf("out_len %u", out_len);
+    WHBLogConsoleDraw();
     int ret = IOS_Ioctl(clientHandle, ioctl, in_buf, in_len, out_buf, out_len);
-    DCFlushRange(out_buf, out_len);
+    WHBLogPrintf("ret %d", ret);
+    WHBLogConsoleDraw();
     return (FSError) ret;
 }
 
@@ -91,156 +85,56 @@ FSError FSA_Ioctlv(FSClient *client, uint32_t request, uint32_t vectorCountIn, u
 
 
 FSError FSA_IoctlvEx(int clientHandle, uint32_t request, uint32_t vectorCountIn, uint32_t vectorCountOut, IOSVec *vector) {
-    DCFlushRange(vector, sizeof(IOSVec) * (vectorCountIn + vectorCountOut));
+    WHBLogPrintf("ioctlv %d", request);
+    WHBLogConsoleDraw();
     int ret = IOS_Ioctlv(clientHandle, request, vectorCountIn, vectorCountOut, vector);
+    WHBLogPrintf("ret %d", ret);
+    WHBLogConsoleDraw();
     return (FSError) ret;
 }
 
 
-/*
-        case IOCTL_FSA_RAW_OPEN: {
-            int fd     = message->ioctl.buffer_in[0];
-            char *path = ((char *) message->ioctl.buffer_in) + message->ioctl.buffer_in[1];
+int FSAEx_FlushVolume(FSClient *client, const char *volume_path) {
+    /*
+        if (!outHandle) {
+        return FS_ERROR_INVALID_BUFFER;
+    }
+    if (!device_path) {
+        return FS_ERROR_INVALID_PATH;
+    }
+    auto *shim = (FSAShimBuffer *) memalign(0x40, sizeof(FSAShimBuffer));
+    if (!shim) {
+        return FS_ERROR_INVALID_BUFFER;
+    }
 
-            message->ioctl.buffer_io[0] = FSA_RawOpen(fd, path, (int *) (message->ioctl.buffer_io + 1));
-            break;
-        }
-        case IOCTL_FSA_RAW_READ: {
-            int fd            = message->ioctl.buffer_in[0];
-            u32 block_size    = message->ioctl.buffer_in[1];
-            u32 cnt           = message->ioctl.buffer_in[2];
-            u64 sector_offset = ((u64) message->ioctl.buffer_in[3] << 32ULL) | message->ioctl.buffer_in[4];
-            int deviceHandle  = message->ioctl.buffer_in[5];
+    shim->clientHandle   = clientHandle;
+    shim->command        = FSA_COMMAND_RAW_OPEN;
+    shim->ipcReqType     = FSA_IPC_REQUEST_IOCTL;
+    shim->response.word0 = 0xFFFFFFFF;
 
-            message->ioctl.buffer_io[0] = FSA_RawRead(fd, ((u8 *) message->ioctl.buffer_io) + 0x40, block_size, cnt, sector_offset, deviceHandle);
-            break;
-        }
-        case IOCTL_FSA_RAW_WRITE: {
-            int fd            = message->ioctl.buffer_in[0];
-            u32 block_size    = message->ioctl.buffer_in[1];
-            u32 cnt           = message->ioctl.buffer_in[2];
-            u64 sector_offset = ((u64) message->ioctl.buffer_in[3] << 32ULL) | message->ioctl.buffer_in[4];
-            int deviceHandle  = message->ioctl.buffer_in[5];
+    FSARequestRawOpen *requestBuffer = &shim->request.rawOpen;
 
-            message->ioctl.buffer_io[0] = FSA_RawWrite(fd, ((u8 *) message->ioctl.buffer_in) + 0x40, block_size, cnt, sector_offset, deviceHandle);
-            break;
-        }
-        case IOCTL_FSA_RAW_CLOSE: {
-            int fd           = message->ioctl.buffer_in[0];
-            int deviceHandle = message->ioctl.buffer_in[1];
+    strncpy(requestBuffer->path, device_path, 0x27F);
 
-            message->ioctl.buffer_io[0] = FSA_RawClose(fd, deviceHandle);
-            break;
-        }
-        */
+    auto res = __FSAShimSend(shim, 0);
+    if (res >= 0) {
+        *outHandle = shim->response.rawOpen.handle;
+    }
+    free(shim);
+    return res;
+    */
+    if (!volume_path) return FS_ERROR_INVALID_PATH;
 
-int FSA_RawOpen(FSClient *client, const char *device_path, int *out_handle) {
-    // https://github.com/wiiu-env/MochaPayload/blob/8015a18f24611c424e207b43176272fd04ea8440/source/ios_mcp/source/fsa.c#L342
-    uint8_t *iobuf = alloc_iobuf();
+    FSAShimBuffer *shim = (FSAShimBuffer *) memalign(0x40, sizeof(FSAShimBuffer));
+    if (!shim) return FS_ERROR_INVALID_BUFFER;
 
-    uint32_t *in_buf = (uint32_t*) iobuf;
-    uint32_t *out_buf = (uint32_t*) &iobuf[0x520];
-    strncpy((char *) &in_buf[0x01], device_path, 0x27F);
+    shim->clientHandle = FSGetClientBody(client)->clientHandle;
+    shim->command = FSA_COMMAND_FLUSH_VOLUME;
+    shim->ipcReqType = FSA_IPC_REQUEST_IOCTL;
+    shim->response.word0 = 0xFFFFFFFF;
 
-    int ret = FSA_Ioctl(client, 0x6A, in_buf, 0x520, out_buf, 0x293);
-
-    if (out_handle) *out_handle = out_buf[1];
-    free(iobuf);
-    return ret;
-}
-
-
-int FSA_RawClose(FSClient *client, int deviceHandle) {
-    // https://github.com/wiiu-env/MochaPayload/blob/8015a18f24611c424e207b43176272fd04ea8440/source/ios_mcp/source/fsa.c#L357
-    uint8_t *iobuf = alloc_iobuf();
-
-    uint32_t *in_buf = (uint32_t*) iobuf;
-    uint32_t *out_buf = (uint32_t*) &iobuf[0x520];
-
-    in_buf[1] = deviceHandle;
-
-    int ret = FSA_Ioctl(client, 0x6D, in_buf, 0x520, out_buf, 0x293);
-
-    free(iobuf);
-    return ret;
-}
-
-
-// offset in blocks of 0x1000 bytes
-int FSA_RawRead(FSClient *client, void *data, uint32_t size_bytes, uint32_t cnt, uint64_t blocks_offset, int device_handle) {
-    // https://github.com/wiiu-env/MochaPayload/blob/8015a18f24611c424e207b43176272fd04ea8440/source/ios_mcp/source/fsa.c#L371
-    uint8_t *iobuf = alloc_iobuf();
-
-    uint32_t *in_buf = (uint32_t*) iobuf;
-    uint32_t *out_buf = (uint32_t*) &iobuf[0x520];
-    IOSVec *iovec = (IOSVec *) &iobuf[0x7C0];
-
-    // note : offset_bytes = blocks_offset * size_bytes
-    in_buf[0x08 / 4] = (blocks_offset >> 32);
-    in_buf[0x0C / 4] = (blocks_offset & 0xFFFFFFFF);
-    in_buf[0x10 / 4] = cnt;
-    in_buf[0x14 / 4] = size_bytes;
-    in_buf[0x18 / 4] = device_handle;
-
-    iovec[0].vaddr = in_buf;
-    iovec[0].len = 0x520;
-
-    iovec[1].vaddr = data;
-    iovec[1].len = size_bytes * cnt;
-
-    iovec[2].vaddr = out_buf;
-    iovec[2].len = 0x293;
-
-    int ret = FSA_Ioctlv(client, 0x6B, 1, 2, iovec);
-    DCFlushRange(data, size_bytes * cnt);
-
-    free(iobuf);
-    return ret;
-}
-
-
-int FSA_RawWrite(FSClient *client, const void *data, uint32_t size_bytes, uint32_t cnt, uint64_t blocks_offset, int device_handle) {
-    // https://github.com/wiiu-env/MochaPayload/blob/8015a18f24611c424e207b43176272fd04ea8440/source/ios_mcp/source/fsa.c#L401
-    uint8_t *iobuf = alloc_iobuf();
-
-    uint32_t *in_buf = (uint32_t*) iobuf;
-    uint32_t *out_buf = (uint32_t*) &iobuf[0x520];
-    IOSVec *iovec = (IOSVec *) &iobuf[0x7C0];
-
-    // note : offset_bytes = blocks_offset * size_bytes
-    in_buf[0x08 / 4] = (blocks_offset >> 32);
-    in_buf[0x0C / 4] = (blocks_offset & 0xFFFFFFFF);
-    in_buf[0x10 / 4] = cnt;
-    in_buf[0x14 / 4] = size_bytes;
-    in_buf[0x18 / 4] = device_handle;
-
-    iovec[0].vaddr = in_buf;
-    iovec[0].len = 0x520;
-
-    iovec[1].vaddr = (void*) data;
-    iovec[1].len = size_bytes * cnt;
-
-    iovec[2].vaddr = out_buf;
-    iovec[2].len = 0x293;
-
-    DCFlushRange(data, size_bytes * cnt);
-    int ret = FSA_Ioctlv(client, 0x6C, 2, 1, iovec);
-
-    free(iobuf);
-    return ret;
-}
-
-
-int FSA_FlushVolume(FSClient *client, const char *volume_path) {
-    uint8_t *iobuf = alloc_iobuf();
-    uint32_t *in_buf  = (uint32_t *) iobuf;
-    uint32_t *out_buf = (uint32_t *) &iobuf[0x520];
-
-    strncpy((char *) &in_buf[0x01], volume_path, 0x27F);
-
-    int ret = FSA_Ioctl(client, 0x1B, in_buf, 0x520, out_buf, 0x293);
-
-    free(iobuf);
+    int ret = __FSAShimSend(shim, 0);
+    free(shim);
     return ret;
 }
 
@@ -248,7 +142,22 @@ int FSA_FlushVolume(FSClient *client, const char *volume_path) {
 // type 4 :
 // 		0x08 : device size in sectors (u64)
 // 		0x10 : device sector size (u32)
-int FSA_GetDeviceInfo(FSClient *client, const char *device_path, int type, void *out_data) {
+int FSAEx_GetDeviceInfo(FSClient *client, const char *device_path, int type, void *out_data) {
+    if (!device_path) return FS_ERROR_INVALID_PATH;
+    if (!out_data) return FS_ERROR_INVALID_BUFFER;
+
+    FSAShimBuffer *shim = (FSAShimBuffer *) memalign(0x40, sizeof(FSAShimBuffer));
+    if (!shim) return FS_ERROR_INVALID_BUFFER;
+
+    shim->clientHandle = FSGetClientBody(client)->clientHandle;
+    shim->command = FSA_COMMAND_GET_INFO_BY_QUERY;
+    shim->ipcReqType = FSA_IPC_REQUEST_IOCTL;
+    shim->response.word0 = 0xFFFFFFFF;
+
+    char *buf = (char*) &shim->request.rawOpen;
+    strncpy(buf, device_path, 0x27F);
+    *(int32_t*) &buf[0x280] = type;
+/*
     uint8_t *iobuf = alloc_iobuf();
     uint32_t *in_buf  = (uint32_t *) iobuf;
     uint32_t *out_buf = (uint32_t *) &iobuf[0x520];
@@ -257,7 +166,7 @@ int FSA_GetDeviceInfo(FSClient *client, const char *device_path, int type, void 
     in_buf[0x284 / 4] = type;
 
     int ret = FSA_Ioctl(client, 0x18, in_buf, 0x520, out_buf, 0x293);
-
+*/
     int size = 0;
 
     switch (type) {
@@ -284,9 +193,16 @@ int FSA_GetDeviceInfo(FSClient *client, const char *device_path, int type, void 
             break;
     }
 
+    /*
     memcpy(out_data, &out_buf[1], size);
 
     free(iobuf);
+    return ret;
+    */
+    memcpy(out_data, (uint8_t*)&shim->response.rawOpen, size);
+
+    int ret = __FSAShimSend(shim, 0);
+    free(shim);
     return ret;
 }
 
