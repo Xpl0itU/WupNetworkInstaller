@@ -60,19 +60,20 @@ static int translate_error(FSStatus error)
 
 
 int mountExternalFat32Disk() {
+    // This actually mounts SD for testing, change "0" to "1" to mount usb
     int res = f_mount(&fs, "0", 1);
     return res;
 }
 
 
 bool mountWiiUDisk() {
-    if (FSAE)
+    // TODO: Use FSA_Mount() etc to mount, since mount_fs doesn't exist in libmocha anymore
+    /*
     if (mount_fs("storage_usb", fsaFdWiiU, NULL, "/vol/storage_usb01") < 0) {
         WHBLogPrint("Mount failed! Press any key to exit");
         WHBLogConsoleDraw();
         return -1;
     }
-    /*
     if (mount_fs("sd", fsaFdSd, NULL, "/vol/storage_external01") < 0) {
         WHBLogPrint("Mount failed! Press any key to exit");
         WHBLogConsoleDraw();
