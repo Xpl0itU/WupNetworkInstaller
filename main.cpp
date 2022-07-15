@@ -71,7 +71,6 @@ int main(int argc, char** argv)
     int returncode = 0;
     std::vector<std::string> files;
     std::vector<std::string> folders;
-    FRESULT fr;
 
     WHBProcInit();
     WHBLogConsoleInit();
@@ -99,8 +98,8 @@ int main(int argc, char** argv)
     //WHBLogConsoleDraw();
 
 #ifdef USE_DEVOPTAB
-    fr = init_extusb_devoptab();
-    if (fr != FR_OK) {
+    returncode = init_extusb_devoptab();
+    if (returncode != 0) {
         WHBLogPrintf("Initializing devoptab failed %d!", returncode);
         WHBLogConsoleDraw();
         waitForKey();
@@ -143,14 +142,16 @@ int main(int argc, char** argv)
 
     cleanup:
 #ifdef USE_DEVOPTAB
-    cleanupFs();
-    fini_extusb_devoptab();
-    unmountWiiUDisk();
-#else
     fini_extusb_devoptab();
 #endif
+    unmountWiiUDisk();
+    cleanupFs();
 
     MEMFreeToDefaultHeap(copyBuffer);
+
+    WHBLogPrint("Disconnect your FAT32 USB drive, then press any key");
+    WHBLogConsoleDraw();
+    waitForKey();
 
     WHBLogConsoleFree();
     WHBLogUdpDeinit();

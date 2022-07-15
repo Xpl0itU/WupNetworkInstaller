@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 static devoptab_t
-        __extusb_fs_devoptab =
+        extusb_fs_devoptab =
         {
                 .name         = "extusb",
                 .structSize   = sizeof(__extusb_fs_file_t),
@@ -40,65 +40,70 @@ static devoptab_t
                 .rmdir_r      = __extusb_fs_rmdir,
         };
 
-static BOOL __extusb_fs_initialised = FALSE;
+static BOOL extusb_fs_initialised = FALSE;
 
-FRESULT init_extusb_devoptab() {
-    FRESULT fr = FR_OK;
-
-    if (__extusb_fs_initialised) {
-        return fr;
+int init_extusb_devoptab() {
+    if (extusb_fs_initialised) {
+        return 0;
     }
 
-    __extusb_fs_devoptab.deviceData = memalign(0x20, sizeof(FATFS));
+    extusb_fs_devoptab.deviceData = memalign(0x40, sizeof(FATFS));
+    if (extusb_fs_devoptab.deviceData == NULL) {
+        return -1;
+    }
+
     char mountPath[0x80];
     sprintf(mountPath, "%d:", DEV_USB_EXT);
 
-    int dev = AddDevice(&__extusb_fs_devoptab);
+    int dev = AddDevice(&extusb_fs_devoptab);
     if (dev != -1) {
         setDefaultDevice(dev);
-        __extusb_fs_initialised = TRUE;
 
         // Mount the external USB drive
-        fr = f_mount(__extusb_fs_devoptab.deviceData, mountPath, 1);
+        FRESULT fr = f_mount(extusb_fs_devoptab.deviceData, mountPath, 1);
 
         if (fr != FR_OK) {
-            free(__extusb_fs_devoptab.deviceData);
-            __extusb_fs_devoptab.deviceData = NULL;
+            free(extusb_fs_devoptab.deviceData);
+            extusb_fs_devoptab.deviceData = NULL;
             return fr;
         }
-        char workDir[0x83];
+        char workDir[0x86];
         // chdir to external USB root for general use
-        strcpy(workDir, __extusb_fs_devoptab.name);
-        strcat(workDir, "/");
+        strcpy(workDir, extusb_fs_devoptab.name);
+        strcat(workDir, ":/");
         chdir(workDir);
+        extusb_fs_initialised = true;
     } else {
         f_unmount(mountPath);
-        free(__extusb_fs_devoptab.deviceData);
-        __extusb_fs_devoptab.deviceData = NULL;
+        free(extusb_fs_devoptab.deviceData);
+        extusb_fs_devoptab.deviceData = NULL;
         return dev;
     }
 
-    return fr;
+    return 0;
 }
 
-FRESULT
-fini_extusb_devoptab() {
-    FRESULT fr = FR_OK;
-
-    if (!__extusb_fs_initialised) {
-        return fr;
+int fini_extusb_devoptab() {
+    if (!extusb_fs_initialised) {
+        return 0;
     }
 
-    RemoveDevice(__extusb_fs_devoptab.name);
+    int rc = RemoveDevice(extusb_fs_devoptab.name);
+    if (rc < 0) {
+        return rc;
+    }
 
     char mountPath[0x80];
     sprintf(mountPath, "%d:", DEV_USB_EXT);
-    f_unmount(mountPath);
-    free(__extusb_fs_devoptab.deviceData);
-    __extusb_fs_devoptab.deviceData = NULL;
-    __extusb_fs_initialised = FALSE;
+    rc = f_unmount(mountPath);
+    if (rc != FR_OK) {
+        return rc;
+    }
+    free(extusb_fs_devoptab.deviceData);
+    extusb_fs_devoptab.deviceData = NULL;
+    extusb_fs_initialised = false;
 
-    return fr;
+    return rc;
 }
 
 #ifdef __cplusplus

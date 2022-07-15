@@ -76,7 +76,6 @@ int mountExternalFat32Disk() {
 
 
 bool mountWiiUDisk() {
-    // TODO: Use FSA_Mount() etc to mount, since mount_fs doesn't exist in libmocha anymore
     if(usbMounted)
         return true;
 
