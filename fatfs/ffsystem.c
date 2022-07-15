@@ -5,8 +5,8 @@
 
 
 #include "ff.h"
-#include <pthread.h>
-#include <stdlib.h>
+#include <coreinit/mutex.h>=
+#include <malloc.h>
 
 
 #if FF_USE_LFN == 3	/* Dynamic memory allocation */
@@ -57,10 +57,10 @@ int ff_cre_syncobj (	/* 1:Function succeeded, 0:Could not create the sync object
 )
 {
     // mutex is 44 bytes
-    FF_SYNC_t pMutex = malloc(sizeof(FF_SYNC_t));
-    if (pMutex == NULL) return 0;
-    pthread_mutex_init(pMutex);
-    *sobj = pMutex;
+    FF_SYNC_t mutex = memalign(0x40, sizeof(FF_SYNC_t));
+    if (mutex == NULL) return 0;
+    OSInitMutex(mutex);
+    *sobj = mutex;
     return 1;
 }
 
@@ -93,7 +93,7 @@ int ff_req_grant (	/* 1:Got a grant to access the volume, 0:Could not get a gran
 	FF_SYNC_t sobj	/* Sync object to wait */
 )
 {
-    pthread_mutex_lock(sobj);
+    OSLockMutex(sobj);
 }
 
 
@@ -107,7 +107,7 @@ void ff_rel_grant (
 	FF_SYNC_t sobj	/* Sync object to be signaled */
 )
 {
-    pthread_mutex_unlock(sobj);
+    OSUnlockMutex(sobj);
 }
 
 #endif

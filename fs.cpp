@@ -4,14 +4,16 @@
 #include <whb/log.h>
 #include <whb/log_console.h>
 #include <coreinit/filesystem.h>
-#include "fatfs/ff.h"
 #include "fs.h"
 #include "utils.h"
 #include "ios_fs.h"
-#include "fatfs/devices.h"
 
-
+#ifdef USE_DEVOPTAB
+#include <sys/dirent.h>
+#else
+#include "fatfs/ff.h"
 static FATFS fs;
+#endif
 
 
 static int translate_error(FSStatus error)
@@ -57,6 +59,7 @@ static int translate_error(FSStatus error)
 }
 
 
+#ifndef USE_DEVOPTAB
 int mountExternalFat32Disk() {
     char mountPath[0x40];
     sprintf(mountPath, "%d:", DEV_USB_EXT);
@@ -65,6 +68,7 @@ int mountExternalFat32Disk() {
     fr = f_chdrive(mountPath);
     return fr;
 }
+#endif
 
 
 bool mountWiiUDisk() {
@@ -92,6 +96,39 @@ bool enumerateFatFsDirectory(const std::string &path, std::vector<std::string> *
         return false;
     }
 
+#ifdef USE_DEVOPTAB
+    DIR *dir = opendir(path.c_str());
+    if (dir == nullptr) {
+        WHBLogPrintf("opendir fail");
+        return false;
+    }
+
+    errno = 0;
+    while (true) {
+        struct dirent *entry = readdir(dir);
+        if (entry == nullptr) {
+            if (errno != 0) {
+                WHBLogPrintf("readdir fail");
+                return false;
+            } else {
+                return true;
+            }
+        }
+
+        switch (entry->d_type) {
+            case DT_DIR:
+                folders->push_back(std::string(entry->d_name));
+                break;
+            case DT_REG:
+                files->push_back(std::string(entry->d_name));
+                break;
+            default:
+                WHBLogPrintf("weird file: %s %c", entry->d_name, entry->d_type);
+                break;
+        }
+    }
+    return true;
+#else
     DIR dir;
     if (f_opendir(&dir, path.c_str()) != FR_OK) {
         WHBLogPrint("fopendir fail");
@@ -114,6 +151,7 @@ bool enumerateFatFsDirectory(const std::string &path, std::vector<std::string> *
         }
         return true;
     }
+#endif
 }
 
 std::string makeAbsolutePath(const std::string &base, const std::string &rel) {
@@ -126,10 +164,23 @@ std::string makeAbsolutePath(const std::string &base, const std::string &rel) {
 }
 
 bool copyFolder(const std::string &src, const std::string &dst, void *buffer, size_t buf_size) {
-    FSClient *fsClient = initFs();
+    std::vector<std::string> files;
+    std::vector<std::string> folders;
 
     WHBLogPrintf("Copying folder %s -> %s", src.c_str(), dst.c_str());
     WHBLogConsoleDraw();
+#ifdef USE_DEVOPTAB
+    DIR *dir = opendir(src.c_str());
+    if (dir == nullptr) {
+        return false;
+    }
+
+    int rc = mkdir(dst.c_str(), 777);
+    if (rc < 0 && errno != EEXIST) {
+        return false;
+    }
+#else
+    FSClient *fsClient = initFs();
 
     FILINFO fi;
     if (f_stat(src.c_str(), &fi) != FR_OK) {
@@ -140,13 +191,6 @@ bool copyFolder(const std::string &src, const std::string &dst, void *buffer, si
     if (f_opendir(&dir, src.c_str()) != FR_OK) {
         return false;
     }
-
-    std::vector<std::string> files;
-    std::vector<std::string> folders;
-
-    if (!enumerateFatFsDirectory(src, &files, &folders)) {
-        return false;
-    }
     
     FSStatus status;
     FSCmdBlock cmd;
@@ -155,6 +199,10 @@ bool copyFolder(const std::string &src, const std::string &dst, void *buffer, si
     if (status < 0) {
         int err = translate_error(status);
         if (err != EEXIST) return false;
+    }
+#endif
+    if (!enumerateFatFsDirectory(src, &files, &folders)) {
+        return false;
     }
 
     for (auto const& fname : files) {
@@ -177,10 +225,33 @@ bool copyFolder(const std::string &src, const std::string &dst, void *buffer, si
 }
 
 bool copyFile(const std::string &src, const std::string &dst, void *buffer, size_t buf_size) {
-    FSClient *fsClient = initFs();
-    
     WHBLogPrintf("Copying file %s -> %s", src.c_str(), dst.c_str());
     WHBLogConsoleDraw();
+
+    size_t fsize;
+
+#ifdef USE_DEVOPTAB
+    struct stat finfo;
+    int rc = stat(src.c_str(), &finfo);
+    if (rc < 0) {
+        WHBLogPrintf("stat %s failed: %d", src.c_str(), errno);
+        return false;
+    }
+
+    FILE *srcFile = fopen(src.c_str(), "r");
+    if (srcFile == nullptr) {
+        WHBLogPrintf("fopen src %s failed: %d", src.c_str(), errno);
+        return false;
+    }
+
+    FILE *dstFile = fopen(dst.c_str(), "w");
+    if (dstFile == nullptr) {
+        WHBLogPrintf("fopen dst %s failed: %d", src.c_str(), errno);
+        return false;
+    }
+#else
+    FSClient *fsClient = initFs();
+
     FIL fp;
     FILINFO fi;
     if (f_stat(src.c_str(), &fi) != FR_OK) {
@@ -199,27 +270,45 @@ bool copyFile(const std::string &src, const std::string &dst, void *buffer, size
         WHBLogPrintf("%s: FSOpenFile error %d", __FUNCTION__, result);
         return false;
     }
+    fsize = fi.fsize;
+#endif
 
-    uint64_t bytes_copied = 0;
-    while (bytes_copied < fi.fsize) {
+    uint64_t total_bytes_written = 0;
+    while (total_bytes_written < fsize) {
         uint bytes_read = 0;
+#ifdef USE_DEVOPTAB
+        if ((bytes_read = fread(buffer, 1, 32768, srcFile)) == 0) {
+            if (ferror(srcFile) != 0) {
+                return false;
+            }
+        }
+#else
         if (f_read(&fp, buffer, buf_size, &bytes_read) != FR_OK) {
             return false;
         }
+#endif
 
         uint bytes_written = 0;
         while (bytes_written < bytes_read) {
+#ifdef USE_DEVOPTAB
+            size_t write_count = fwrite(buffer, 1, bytes_read, srcFile);
+            if (write_count <= 0) {
+                WHBLogPrintf("fwrite error");
+                return false;
+            }
+#else
             FSInitCmdBlock(&cmd);
 
             // FSStatus FSWriteFile( FSClient *client, FSCmdBlock *block, const void *source, FSSize size, FSCount count, FSFileHandle fileHandle, FSFlag flag, FSRetFlag errHandling );
-            FSStatus fss = FSWriteFile(fsClient, &cmd, (uint8_t*) buffer, 1, bytes_read, (FSFileHandle)handle, 0, FS_ERROR_FLAG_ALL);
-            if (fss < 0) {
-                WHBLogPrintf("%s: FSWriteFile error %d", __FUNCTION__, fss);
+            FSStatus write_count = FSWriteFile(fsClient, &cmd, (uint8_t*) buffer, 1, bytes_read, (FSFileHandle)handle, 0, FS_ERROR_FLAG_ALL);
+            if (write_count < 0) {
+                WHBLogPrintf("%s: FSWriteFile error %d", __FUNCTION__, write_count);
                 return false;
             }
-            bytes_written += fss;
-            bytes_copied += fss;
-            printProgressBar(bytes_copied, fi.fsize);
+#endif
+            bytes_written += write_count;
+            total_bytes_written += write_count;
+            printProgressBar(total_bytes_written, fsize);
         }
     }
 

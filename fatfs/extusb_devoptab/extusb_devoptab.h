@@ -41,6 +41,8 @@ typedef struct {
     FILINFO entry_data;
 } __extusb_fs_dir_t;
 
+FRESULT init_extusb_devoptab();
+FRESULT fini_extusb_devoptab();
 
 int __extusb_fs_open(struct _reent *r, void *fileStruct, const char *path,
                      int flags, int mode);

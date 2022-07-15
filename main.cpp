@@ -13,6 +13,7 @@
 #include "fs.h"
 #include "ios_fs.h"
 #include "Installer.h"
+#include "fatfs/extusb_devoptab/extusb_devoptab.h"
 
 #include <nlohmann/json.hpp>
 using json=nlohmann::json;
@@ -32,7 +33,7 @@ static MCPError runInstall(const std::string &tempPath) {
 
 
 bool copyAndInstall(const std::string &srcPath, void *copyBuffer) {
-    std::string tempPath = "/vol/storage_usb01/usr/tmp/";
+    std::string tempPath = "/vol/storage_usb02/usr/tmp/";
     tempPath.append(srcPath);
     WHBLogPrintf("Copying %s to temp storage", srcPath.c_str());
     if (copyFolder(srcPath, tempPath, copyBuffer, COPY_BUFFER_SZ)) {
@@ -70,20 +71,14 @@ int main(int argc, char** argv)
     int returncode;
     std::vector<std::string> files;
     std::vector<std::string> folders;
+    FRESULT fr;
 
     WHBProcInit();
-
-    //!*******************************************************************
-    //!                   Initialize function pointers                   *
-    //!*******************************************************************
     WHBLogConsoleInit();
     WHBLogUdpInit();
     WHBLogConsoleSetColor(0);
     Mocha_InitLibrary();
 
-    //!*******************************************************************
-    //!                    Initialize heap memory                        *
-    //!*******************************************************************
     WHBLogPrint("Initialize heap memory");
     WHBLogConsoleDraw();
 
@@ -100,19 +95,19 @@ int main(int argc, char** argv)
     //WHBLogPrint(object.dump().c_str());
     //WHBLogConsoleDraw();
 
-    //!*******************************************************************
-    //!                        Initialize FS                             *
-    //!*******************************************************************
-
-    WHBLogPrint("Mounting SD");
-    WHBLogConsoleDraw();
-    // returncode = initFs();
-
-    //!*******************************************************************
-    //!                    Enter main application                        *
-    //!*******************************************************************
     //WHBLogPrint("Start main application");
     //WHBLogConsoleDraw();
+
+#ifdef USE_DEVOPTAB
+    fr = init_extusb_devoptab();
+    if (fr != FR_OK) {
+        WHBLogPrintf("Initializing devoptab failed %d!", returncode);
+        WHBLogConsoleDraw();
+        waitForKey();
+        goto cleanup;
+    }
+#else
+    initFs();
     returncode = mountExternalFat32Disk();
     if (returncode != 0) {
         WHBLogPrintf("Mounting disk failed %d! Press any key to exit", returncode);
@@ -120,6 +115,7 @@ int main(int argc, char** argv)
         waitForKey();
         goto cleanup;
     }
+#endif
 
     if (!enumerateFatFsDirectory("install", &files, &folders)) {
         WHBLogPrint("Enumerating disk failed!");
@@ -145,7 +141,11 @@ int main(int argc, char** argv)
     }
 
     cleanup:
+#ifdef USE_DEVOPTAB
     cleanupFs();
+#else
+    fini_extusb_devoptab();
+#endif
 
     MEMFreeToDefaultHeap(copyBuffer);
 
