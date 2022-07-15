@@ -1,5 +1,9 @@
 #include "extusb_devoptab.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int
 __extusb_fs_fsync(struct _reent *r,
                   void *fd) {
@@ -17,3 +21,7 @@ __extusb_fs_fsync(struct _reent *r,
 
     return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif

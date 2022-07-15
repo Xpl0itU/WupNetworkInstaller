@@ -1,5 +1,9 @@
 #include "extusb_devoptab.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int
 __extusb_fs_fstat(struct _reent *r,
                   void *fd,
@@ -12,3 +16,7 @@ __extusb_fs_fstat(struct _reent *r,
     __extusb_fs_file_t *file = (__extusb_fs_file_t *) fd;
     return __extusb_fs_stat(r, file->path, st);
 }
+
+#ifdef __cplusplus
+}
+#endif

@@ -1,6 +1,10 @@
 #include <sys/stat.h>
 #include "extusb_devoptab.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static inline FSMode
 __extusb_fs_convert_mode(mode_t mode) {
     // Convert normal Unix octal permission bits into CafeOS hexadecimal permission bits
@@ -36,3 +40,7 @@ __extusb_fs_chmod(struct _reent *r,
 
     return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif

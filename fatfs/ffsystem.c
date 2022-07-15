@@ -5,7 +5,7 @@
 
 
 #include "ff.h"
-#include <coreinit/mutex.h>=
+#include <coreinit/mutex.h>
 #include <malloc.h>
 
 
@@ -93,7 +93,9 @@ int ff_req_grant (	/* 1:Got a grant to access the volume, 0:Could not get a gran
 	FF_SYNC_t sobj	/* Sync object to wait */
 )
 {
+    // TODO: Use OSTryLockMutex for timeout
     OSLockMutex(sobj);
+    return 1;
 }
 
 

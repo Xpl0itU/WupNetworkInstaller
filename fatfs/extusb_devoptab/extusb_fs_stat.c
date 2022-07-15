@@ -1,5 +1,9 @@
 #include "extusb_devoptab.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int
 __extusb_fs_stat(struct _reent *r,
                  const char *path,
@@ -30,13 +34,17 @@ __extusb_fs_stat(struct _reent *r,
     st->st_atime = __extusb_fs_translate_time(fno.fdate, fno.ftime);
     st->st_ctime = __extusb_fs_translate_time(fno.fdate, fno.ftime);
     st->st_mtime = __extusb_fs_translate_time(fno.fdate, fno.ftime);
-    st->st_mode = __extusb_fs_translate_mode(fno.fattrib);
+    st->st_mode = __extusb_fs_translate_mode(fno);
 
     if (!(fno.fattrib & AM_DIR)) {
-        st->st_size = fno.fsize;
+        st->st_size = (off_t) fno.fsize;
         st->st_uid = 0;
         st->st_gid = 0;
     }
 
     return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif

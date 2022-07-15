@@ -13,7 +13,7 @@ add_subdirectory(nlohmann_json)
 find_package(CURL REQUIRED)
 find_library(LIBMOCHA mocha REQUIRED HINTS "${DEVKITPRO}/wut/usr/lib")
 
-set(extusb_devoptab
+set(extusb_devoptab_sources
         extusb_devoptab.c
         extusb_fs_chdir.c
         extusb_fs_chmod.c

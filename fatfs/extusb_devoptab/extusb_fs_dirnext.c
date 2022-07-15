@@ -1,5 +1,9 @@
 #include "extusb_devoptab.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int
 __extusb_fs_dirnext(struct _reent *r,
                     DIR_ITER *dirState,
@@ -36,3 +40,7 @@ __extusb_fs_dirnext(struct _reent *r,
     strcpy(filename, dir->entry_data.fname);
     return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif

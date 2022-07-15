@@ -1,5 +1,9 @@
 #include "extusb_devoptab.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int
 __extusb_fs_rmdir(struct _reent *r,
                   const char *name) {
@@ -22,3 +26,7 @@ __extusb_fs_rmdir(struct _reent *r,
 
     return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif

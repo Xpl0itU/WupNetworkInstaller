@@ -276,6 +276,7 @@
 
 
 /* #include <somertos.h>	// O/S definitions */
+#include <coreinit/mutex.h>
 #define FF_FS_REENTRANT	1
 #define FF_FS_TIMEOUT	1000
 #define FF_SYNC_t		OSMutex *

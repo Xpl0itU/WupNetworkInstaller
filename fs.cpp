@@ -4,18 +4,24 @@
 #include <whb/log.h>
 #include <whb/log_console.h>
 #include <coreinit/filesystem.h>
+#include <nn/spm/storage.h>
 #include "fs.h"
 #include "utils.h"
 #include "ios_fs.h"
 
 #ifdef USE_DEVOPTAB
 #include <sys/dirent.h>
+#include <coreinit/filesystem_fsa.h>
+
 #else
 #include "fatfs/ff.h"
 static FATFS fs;
 #endif
 
+static bool usbMounted = false;
 
+
+#ifndef USE_DEVOPTAB
 static int translate_error(FSStatus error)
 {
    switch ((int32_t)error) {
@@ -58,8 +64,6 @@ static int translate_error(FSStatus error)
    }
 }
 
-
-#ifndef USE_DEVOPTAB
 int mountExternalFat32Disk() {
     char mountPath[0x40];
     sprintf(mountPath, "%d:", DEV_USB_EXT);
@@ -73,19 +77,44 @@ int mountExternalFat32Disk() {
 
 bool mountWiiUDisk() {
     // TODO: Use FSA_Mount() etc to mount, since mount_fs doesn't exist in libmocha anymore
-    /*
-    if (mount_fs("storage_usb", fsaFdWiiU, NULL, "/vol/storage_usb01") < 0) {
-        WHBLogPrint("Mount failed! Press any key to exit");
-        WHBLogConsoleDraw();
-        return -1;
+    if(usbMounted)
+        return true;
+
+    FSClient *fsClient = initFs();
+    if (fsClient == nullptr) return false;
+
+    nn::spm::VolumeId volumeId{};
+    GetDefaultExtendedStorageVolumeId(&volumeId);
+    WHBLogPrintf("Default ext storage id: %s", volumeId.id);
+
+    FSError ret = FSAMount(FSGetClientBody(fsClient)->clientHandle, "/dev/usb01", "/vol/storage_installer/usb", FSA_MOUNT_FLAG_GLOBAL_MOUNT, nullptr, 0);
+
+    if(ret != 0)
+    {
+        WHBLogPrintf("Error mounting /dev/usb01: %#010x", ret);
+        return false;
     }
-    if (mount_fs("sd", fsaFdSd, NULL, "/vol/storage_external01") < 0) {
-        WHBLogPrint("Mount failed! Press any key to exit");
-        WHBLogConsoleDraw();
-        return -1;
+
+    usbMounted = true;
+    return true;
+}
+
+
+bool unmountWiiUDisk() {
+    if (!usbMounted) return true;
+
+    FSClient *fsClient = initFs();
+    if (fsClient == nullptr) return false;
+
+    FSError ret = FSAUnmount(FSGetClientBody(fsClient)->clientHandle, "/vol/storage_installer/usb", FSA_UNMOUNT_FLAG_BIND_MOUNT);
+
+    if(ret != 0)
+    {
+        WHBLogPrintf("Error unmounting /dev/usb01: %#010x", ret);
+        return false;
     }
-    */
-    //FSA_Mount(fd, device_path, volume_path, flags, arg_string, arg_string_len);
+
+    usbMounted = false;
     return true;
 }
 
@@ -228,10 +257,10 @@ bool copyFile(const std::string &src, const std::string &dst, void *buffer, size
     WHBLogPrintf("Copying file %s -> %s", src.c_str(), dst.c_str());
     WHBLogConsoleDraw();
 
-    size_t fsize;
+    size_t fsize = 0;
 
 #ifdef USE_DEVOPTAB
-    struct stat finfo;
+    struct stat finfo{};
     int rc = stat(src.c_str(), &finfo);
     if (rc < 0) {
         WHBLogPrintf("stat %s failed: %d", src.c_str(), errno);

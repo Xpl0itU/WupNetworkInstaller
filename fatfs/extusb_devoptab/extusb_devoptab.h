@@ -13,6 +13,10 @@
 #include <unistd.h>
 #include "../ff.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * Open file struct
  */
@@ -103,3 +107,7 @@ int __extusb_fs_translate_error(FRESULT error);
 time_t __extusb_fs_translate_time(WORD fdate, WORD ftime);
 
 mode_t __extusb_fs_translate_mode(FILINFO fileStat);
+
+#ifdef __cplusplus
+}
+#endif

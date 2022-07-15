@@ -1,5 +1,9 @@
 #include "extusb_devoptab.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 off_t
 __extusb_fs_seek(struct _reent *r,
                  void *fd,
@@ -64,3 +68,7 @@ __extusb_fs_seek(struct _reent *r,
 
     return file->offset;
 }
+
+#ifdef __cplusplus
+}
+#endif

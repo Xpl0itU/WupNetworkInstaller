@@ -5,6 +5,10 @@
 #include "../devices.h"
 #include "extusb_devoptab.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static devoptab_t
         __extusb_fs_devoptab =
         {
@@ -96,3 +100,7 @@ fini_extusb_devoptab() {
 
     return fr;
 }
+
+#ifdef __cplusplus
+}
+#endif

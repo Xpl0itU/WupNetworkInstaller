@@ -2,6 +2,10 @@
 #include "../devices.h"
 #include "stdio.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 char *
 __extusb_fs_fixpath(struct _reent *r,
                     const char *path) {
@@ -109,3 +113,7 @@ mode_t __extusb_fs_translate_mode(FILINFO fileStat) {
     flags |= FS_MODE_EXEC_OWNER | FS_MODE_EXEC_GROUP | FS_MODE_EXEC_OTHER;
     return retMode | flags;
 }
+
+#ifdef __cplusplus
+}
+#endif

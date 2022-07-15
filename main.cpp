@@ -68,7 +68,7 @@ bool copyAndInstall(const std::string &srcPath, void *copyBuffer) {
 
 int main(int argc, char** argv)
 {
-    int returncode;
+    int returncode = 0;
     std::vector<std::string> files;
     std::vector<std::string> folders;
     FRESULT fr;
@@ -106,6 +106,7 @@ int main(int argc, char** argv)
         waitForKey();
         goto cleanup;
     }
+    mountWiiUDisk();
 #else
     initFs();
     returncode = mountExternalFat32Disk();
@@ -143,6 +144,8 @@ int main(int argc, char** argv)
     cleanup:
 #ifdef USE_DEVOPTAB
     cleanupFs();
+    fini_extusb_devoptab();
+    unmountWiiUDisk();
 #else
     fini_extusb_devoptab();
 #endif

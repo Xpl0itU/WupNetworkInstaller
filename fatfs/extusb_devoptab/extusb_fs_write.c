@@ -1,5 +1,9 @@
 #include "extusb_devoptab.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 ssize_t __extusb_fs_write(struct _reent *r, void *fd, const char *ptr,
                           size_t len) {
     if (!fd || !ptr) {
@@ -60,3 +64,7 @@ ssize_t __extusb_fs_write(struct _reent *r, void *fd, const char *ptr,
 
     return (ssize_t) bytesWritten;
 }
+
+#ifdef __cplusplus
+}
+#endif

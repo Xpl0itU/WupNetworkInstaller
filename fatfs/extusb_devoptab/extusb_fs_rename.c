@@ -1,5 +1,9 @@
 #include "extusb_devoptab.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int
 __extusb_fs_rename(struct _reent *r,
                    const char *oldName,
@@ -33,3 +37,7 @@ __extusb_fs_rename(struct _reent *r,
 
     return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif

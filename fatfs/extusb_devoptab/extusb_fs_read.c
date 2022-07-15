@@ -1,5 +1,9 @@
 #include "extusb_devoptab.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 ssize_t __extusb_fs_read(struct _reent *r, void *fd, char *ptr, size_t len) {
     if (!fd || !ptr) {
         r->_errno = EINVAL;
@@ -61,3 +65,7 @@ ssize_t __extusb_fs_read(struct _reent *r, void *fd, char *ptr, size_t len) {
 
     return (ssize_t) bytesRead;
 }
+
+#ifdef __cplusplus
+}
+#endif

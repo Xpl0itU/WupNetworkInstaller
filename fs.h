@@ -7,6 +7,7 @@
 #include <coreinit/filesystem.h>
 
 bool mountWiiUDisk();
+bool unmountWiiUDisk();
 #ifndef USE_DEVOPTAB
 int mountExternalFat32Disk();
 #endif

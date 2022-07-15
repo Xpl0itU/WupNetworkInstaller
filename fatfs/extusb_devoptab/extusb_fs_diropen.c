@@ -1,5 +1,9 @@
 #include "extusb_devoptab.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 DIR_ITER *
 __extusb_fs_diropen(struct _reent *r,
                     DIR_ITER *dirState,
@@ -24,3 +28,7 @@ __extusb_fs_diropen(struct _reent *r,
     memset(&dir->entry_data, 0, sizeof(dir->entry_data));
     return dirState;
 }
+
+#ifdef __cplusplus
+}
+#endif

@@ -1,5 +1,9 @@
 #include "extusb_devoptab.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int __extusb_fs_open(struct _reent *r, void *fileStruct, const char *path, int flags, int mode) {
     if (!fileStruct || !path) {
         r->_errno = EINVAL;
@@ -47,3 +51,7 @@ int __extusb_fs_open(struct _reent *r, void *fileStruct, const char *path, int f
     file->path = fixedPath;
     return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif

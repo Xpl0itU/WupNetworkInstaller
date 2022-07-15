@@ -1,5 +1,9 @@
 #include "extusb_devoptab.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int
 __extusb_fs_dirclose(struct _reent *r,
                      DIR_ITER *dirState) {
@@ -18,3 +22,7 @@ __extusb_fs_dirclose(struct _reent *r,
 
     return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif
