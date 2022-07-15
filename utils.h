@@ -1,6 +1,6 @@
 #pragma once
-
-#include <stdint.h>
+#include <cstdint>
 
 void printProgressBar(uint64_t current, uint64_t total);
-void waitForKey();
+uint32_t getKey();
+uint32_t waitForKey();

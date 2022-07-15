@@ -1,7 +1,6 @@
 /*---------------------------------------------------------------------------/
 /  FatFs Functional Configurations
 /---------------------------------------------------------------------------*/
-
 #define FFCONF_DEF	86631	/* Revision ID */
 
 /*---------------------------------------------------------------------------/
@@ -170,7 +169,7 @@
 /* Number of volumes (logical drives) to be used. (1-10) */
 
 
-#define FF_STR_VOLUME_ID	0
+#define FF_STR_VOLUME_ID	2
 #define FF_VOLUME_STRS        "sd", "usb"
 //#define FF_VOLUME_STRS		"RAM","NAND","CF","SD","SD2","USB","USB2","USB3"
 /* FF_STR_VOLUME_ID switches support for volume ID in arbitrary strings.

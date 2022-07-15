@@ -7,19 +7,13 @@
 /* storage control modules to the FatFs module with a defined API.       */
 /*-----------------------------------------------------------------------*/
 
-#include "ff.h"			/* Obtains integer types */
-#include "diskio.h"		/* Declarations of disk functions */
+#include "ff.h"            /* Obtains integer types */
+#include "diskio.h"        /* Declarations of disk functions */
 #include <mocha/fsa.h>
 #include <coreinit/filesystem.h>
 #include <coreinit/time.h>
 #include "../ios_fs.h"
-
-/* Definitions of physical drive number for each drive */
-#define DEV_SD		0
-#define DEV_USB_EXT 1
-
-#define SD_PATH		"/dev/sdcard01"
-#define USB_EXT_PATH	"/dev/usb02"
+#include "devices.h"
 
 
 static int deviceFds[] = {-1, -1};
@@ -31,15 +25,14 @@ static FSClient *fsClient;
 /* Get Drive Status                                                      */
 /*-----------------------------------------------------------------------*/
 
-DSTATUS disk_status (
-	BYTE pdrv		/* Physical drive number to identify the drive */
-)
-{
-	if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
-	if (deviceFds[pdrv] < 0) {
-		return STA_NOINIT;
-	}
-	return 0;
+DSTATUS disk_status(
+        BYTE pdrv        /* Physical drive number to identify the drive */
+) {
+    if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
+    if (deviceFds[pdrv] < 0) {
+        return STA_NOINIT;
+    }
+    return 0;
 }
 
 
@@ -48,21 +41,20 @@ DSTATUS disk_status (
 /* Inidialize a Drive                                                    */
 /*-----------------------------------------------------------------------*/
 
-DSTATUS disk_initialize (
-	BYTE pdrv				/* Physical drive number to identify the drive */
-)
-{
-	if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
-	fsClient = initFs();
-	if (fsClient == NULL) {
-		return STA_NOINIT;
-	}
+DSTATUS disk_initialize(
+        BYTE pdrv                /* Physical drive number to identify the drive */
+) {
+    if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
+    fsClient = initFs();
+    if (fsClient == NULL) {
+        return STA_NOINIT;
+    }
 
-	int res = FSAEx_RawOpen(fsClient, devicePaths[pdrv], &deviceFds[pdrv]);
-	if (res < 0) return STA_NOINIT;
-	if (deviceFds[pdrv] < 0) return STA_NOINIT;
+    int res = FSAEx_RawOpen(fsClient, devicePaths[pdrv], &deviceFds[pdrv]);
+    if (res < 0) return STA_NOINIT;
+    if (deviceFds[pdrv] < 0) return STA_NOINIT;
 
-	return 0;
+    return 0;
 }
 
 
@@ -71,20 +63,19 @@ DSTATUS disk_initialize (
 /* Read Sector(s)                                                        */
 /*-----------------------------------------------------------------------*/
 
-DRESULT disk_read (
-	BYTE pdrv,		/* Physical drive nmuber to identify the drive */
-	BYTE *buff,		/* Data buffer to store read data */
-	LBA_t sector,	/* Start sector in LBA */
-	UINT count		/* Number of sectors to read */
-)
-{
-	if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
-	// sector size 512 bytes
-	if (deviceFds[pdrv] < 0) return RES_NOTRDY;
-	int res = FSAEx_RawRead(fsClient, buff, 512, count, sector, deviceFds[pdrv]);
+DRESULT disk_read(
+        BYTE pdrv,        /* Physical drive nmuber to identify the drive */
+        BYTE *buff,        /* Data buffer to store read data */
+        LBA_t sector,    /* Start sector in LBA */
+        UINT count        /* Number of sectors to read */
+) {
+    if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
+    // sector size 512 bytes
+    if (deviceFds[pdrv] < 0) return RES_NOTRDY;
+    int res = FSAEx_RawRead(fsClient, buff, 512, count, sector, deviceFds[pdrv]);
     if (res < 0) return RES_ERROR;
 
-	return RES_OK;
+    return RES_OK;
 }
 
 
@@ -95,19 +86,18 @@ DRESULT disk_read (
 
 #if FF_FS_READONLY == 0
 
-DRESULT disk_write (
-	BYTE pdrv,			/* Physical drive nmuber to identify the drive */
-	const BYTE *buff,	/* Data to be written */
-	LBA_t sector,		/* Start sector in LBA */
-	UINT count			/* Number of sectors to write */
-)
-{
-	if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
-	if (deviceFds[pdrv] < 0) return RES_NOTRDY;
-	int res = FSAEx_RawWrite(fsClient, (const void*) buff, 512, count, sector, deviceFds[pdrv]);
+DRESULT disk_write(
+        BYTE pdrv,            /* Physical drive nmuber to identify the drive */
+        const BYTE *buff,    /* Data to be written */
+        LBA_t sector,        /* Start sector in LBA */
+        UINT count            /* Number of sectors to write */
+) {
+    if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
+    if (deviceFds[pdrv] < 0) return RES_NOTRDY;
+    int res = FSAEx_RawWrite(fsClient, (const void *) buff, 512, count, sector, deviceFds[pdrv]);
     if (res < 0) return RES_ERROR;
 
-	return RES_OK;
+    return RES_OK;
 }
 
 #endif
@@ -117,51 +107,50 @@ DRESULT disk_write (
 /* Miscellaneous Functions                                               */
 /*-----------------------------------------------------------------------*/
 
-DRESULT disk_ioctl (
-	BYTE pdrv,		/* Physical drive nmuber (0..) */
-	BYTE cmd,		/* Control code */
-	void *buff		/* Buffer to send/receive control data */
-)
-{
-	if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
-	int res;
-	uint8_t ioctl_buf[0x28];
+DRESULT disk_ioctl(
+        BYTE pdrv,        /* Physical drive nmuber (0..) */
+        BYTE cmd,        /* Control code */
+        void *buff        /* Buffer to send/receive control data */
+) {
+    if (pdrv < 0 || pdrv >= FF_VOLUMES) return STA_NOINIT;
+    int res;
+    uint8_t ioctl_buf[0x28];
 
-	if (deviceFds[pdrv] < 0) return RES_NOTRDY;
-	const char *devicePath = devicePaths[pdrv];
+    if (deviceFds[pdrv] < 0) return RES_NOTRDY;
+    const char *devicePath = devicePaths[pdrv];
 
-	switch (cmd) {
-		case CTRL_SYNC:
-			res = FSAEx_FlushVolume(fsClient, devicePath);
-			if (res) return RES_ERROR;
-			return RES_OK;
-		case GET_SECTOR_COUNT:
-			res = FSAEx_GetDeviceInfo(fsClient, devicePath, 0x4, ioctl_buf);
-			if (res) return RES_ERROR;
-			*(LBA_t*)buff = *(uint64_t*)&ioctl_buf[0x08];
-			return RES_OK;
-		case GET_SECTOR_SIZE:
-			res = FSAEx_GetDeviceInfo(fsClient, devicePath, 0x4, ioctl_buf);
-			if (res) return RES_ERROR;
-			*(WORD*)buff = *(uint32_t*)&ioctl_buf[0x10];
-			return RES_OK;
-		case GET_BLOCK_SIZE:
-			*(WORD*)buff = 1;
-			return RES_OK;
-		case CTRL_TRIM:
-			return RES_OK;
-	}
+    switch (cmd) {
+        case CTRL_SYNC:
+            res = FSAEx_FlushVolume(fsClient, devicePath);
+            if (res) return RES_ERROR;
+            return RES_OK;
+        case GET_SECTOR_COUNT:
+            res = FSAEx_GetDeviceInfo(fsClient, devicePath, 0x4, ioctl_buf);
+            if (res) return RES_ERROR;
+            *(LBA_t *) buff = *(uint64_t *) &ioctl_buf[0x08];
+            return RES_OK;
+        case GET_SECTOR_SIZE:
+            res = FSAEx_GetDeviceInfo(fsClient, devicePath, 0x4, ioctl_buf);
+            if (res) return RES_ERROR;
+            *(WORD *) buff = *(uint32_t *) &ioctl_buf[0x10];
+            return RES_OK;
+        case GET_BLOCK_SIZE:
+            *(WORD *) buff = 1;
+            return RES_OK;
+        case CTRL_TRIM:
+            return RES_OK;
+    }
 
-	return RES_PARERR;
+    return RES_PARERR;
 }
 
 DWORD get_fattime() {
-	OSCalendarTime output;
-	OSTicksToCalendarTime(OSGetTime(), &output);
-	return (DWORD)(output.tm_year - 1980) << 25 |
-		(DWORD)(output.tm_mon + 1) << 21 |
-		(DWORD)output.tm_mday << 16 |
-		(DWORD)output.tm_hour << 11 |
-		(DWORD)output.tm_min << 5 |
-		(DWORD)output.tm_sec >> 1;
+    OSCalendarTime output;
+    OSTicksToCalendarTime(OSGetTime(), &output);
+    return (DWORD) (output.tm_year - 1980) << 25 |
+           (DWORD) (output.tm_mon + 1) << 21 |
+           (DWORD) output.tm_mday << 16 |
+           (DWORD) output.tm_hour << 11 |
+           (DWORD) output.tm_min << 5 |
+           (DWORD) output.tm_sec >> 1;
 }

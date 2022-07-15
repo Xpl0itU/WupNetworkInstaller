@@ -1,14 +1,15 @@
-#include <stdint.h>
-#include <string.h>
+#include <cstdint>
 #include <string>
 #include <whb/log.h>
 #include <whb/log_console.h>
 #include <vpad/input.h>
 #include "utils.h"
 
+static uint32_t lastKey = 0;
+
 
 void printProgressBar(uint64_t current, uint64_t total) {
-    int percent = (int) (current * 100.0f / total);
+    int percent = static_cast<int>(current * 100.0 / total);
 
     std::string bar;
     char buf[64];
@@ -28,8 +29,38 @@ void printProgressBar(uint64_t current, uint64_t total) {
     WHBLogConsoleDraw();
 }
 
+uint32_t getKey() {
+    VPADStatus status;
+    VPADReadError error;
 
-void waitForKey() {
+    VPADRead(VPAD_CHAN_0, &status, 1, &error);
+    switch (error) {
+        case VPAD_READ_SUCCESS: {
+            // No error
+            lastKey = status.trigger;
+            return lastKey;
+        }
+        case VPAD_READ_NO_SAMPLES: {
+            // No new sample data available
+            return lastKey;
+        }
+        case VPAD_READ_INVALID_CONTROLLER: {
+            // Invalid controller
+            return 0;
+        }
+        case VPAD_READ_BUSY: {
+            // Busy
+            return lastKey;
+        }
+        default: {
+            WHBLogPrintf("Unknown VPAD error! %08X", error);
+            WHBLogConsoleDraw();
+            return 0;
+        }
+    }
+}
+
+uint32_t waitForKey() {
     VPADStatus status;
     VPADReadError error;
     while (true) {
@@ -48,16 +79,11 @@ void waitForKey() {
                 // Invalid controller
                 continue;
             }
-            /*
             case VPAD_READ_BUSY: {
                 // Busy
                 continue;
             }
-            */
             default: {
-                if ((int32_t) error == -4) {
-                    continue;
-                }
                 WHBLogPrintf("Unknown VPAD error! %08X", error);
                 WHBLogConsoleDraw();
                 break;
@@ -65,7 +91,7 @@ void waitForKey() {
         }
 
         if (status.trigger) {
-            break;
+            return status.trigger;
         }
     }
 }

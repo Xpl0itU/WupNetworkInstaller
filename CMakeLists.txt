@@ -10,19 +10,53 @@ include_directories(${DEVKITPRO}/portlibs/wiiu/include)
 link_directories(${DEVKITPRO}/portlibs/wiiu/lib)
 
 add_subdirectory(nlohmann_json)
-find_package( CURL REQUIRED )
-find_library( LIBMOCHA mocha REQUIRED HINTS "${DEVKITPRO}/wut/usr/lib" )
+find_package(CURL REQUIRED)
+find_library(LIBMOCHA mocha REQUIRED HINTS "${DEVKITPRO}/wut/usr/lib")
+
+set(extusb_devoptab
+        extusb_devoptab.c
+        extusb_fs_chdir.c
+        extusb_fs_chmod.c
+        extusb_fs_close.c
+        extusb_fs_dirclose.c
+        extusb_fs_dirnext.c
+        extusb_fs_diropen.c
+        extusb_fs_dirreset.c
+        extusb_fs_fchmod.c
+        extusb_fs_fstat.c
+        extusb_fs_fsync.c
+        extusb_fs_link.c
+        extusb_fs_mkdir.c
+        extusb_fs_open.c
+        extusb_fs_read.c
+        extusb_fs_rename.c
+        extusb_fs_rmdir.c
+        extusb_fs_seek.c
+        extusb_fs_stat.c
+        extusb_fs_statvfs.c
+        extusb_fs_truncate.c
+        extusb_fs_unlink.c
+        extusb_fs_utils.c
+        extusb_fs_utimes.c
+        extusb_fs_write.c
+        )
+list(TRANSFORM extusb_devoptab_sources PREPEND "fatfs/extusb_devoptab/")
+
+set(fatfs_sources
+        diskio.c
+        ff.c
+        ffsystem.c
+        ffunicode.c)
+list(TRANSFORM fatfs_sources PREPEND "fatfs/")
 
 add_executable(wupnetworkinstaller
-main.cpp
-fs.cpp
-ios_fs.c
-utils.cpp
-fatfs/diskio.c
-fatfs/ff.c
-fatfs/ffsystem.c
-fatfs/ffunicode.c
-)
+        main.cpp
+        fs.cpp
+        ios_fs.c
+        utils.cpp
+        Installer.cpp
+        ${fatfs_sources}
+        ${extusb_devoptab_sources} Installer.cpp Installer.h)
 set_target_properties(wupnetworkinstaller PROPERTIES LINKER_LANGUAGE CXX)
 set_target_properties(wupnetworkinstaller PROPERTIES CXX_STANDARD_REQUIRED ON)
 target_include_directories(wupnetworkinstaller PRIVATE "${DEVKITPRO}/wut/usr/include")
