@@ -147,7 +147,7 @@ std::tuple<MCPError, std::string> Installer::install(MCPInstallTarget target, co
             if (installProgressCallback != nullptr) {
                 installProgressCallback(installProgress);
             }
-            usleep(50000);
+            usleep(updateTime);
         }
     }
 

@@ -33,15 +33,33 @@ static std::tuple<MCPError, std::string> runInstall(const std::string &tempPath)
 
 
 bool copyAndInstall(const std::string &srcPath, void *copyBuffer) {
-    std::string tempPath = "storage_usb:/usr/tmp/";
+    std::string nativePath = "/vol/storage_installer/install/";
+    std::string tempPath = "fs:" + nativePath;
+    int rc = mkdir(tempPath.c_str(), 0777);
+    if (rc < 0) {
+        if (errno != EEXIST) {
+            WHBLogPrintf("mkdir failed %d", errno);
+            WHBLogConsoleDraw();
+            return false;
+        } else {
+            rc = chmod(tempPath.c_str(), 0777);
+            if (rc < 0) {
+                WHBLogPrintf("chmod failed %d", errno);
+                WHBLogConsoleDraw();
+                return false;
+            }
+        }
+    }
     tempPath.append(srcPath);
+    nativePath.append(srcPath);
     WHBLogPrintf("Copying %s to temp storage", srcPath.c_str());
     if (copyFolder(srcPath, tempPath, copyBuffer, COPY_BUFFER_SZ)) {
         WHBLogPrintf("Installing %s", srcPath.c_str());
         WHBLogPrintf("Press HOME to cancel");
         WHBLogConsoleDraw();
-        std::future<std::tuple<MCPError, std::string>> fut = std::async(&runInstall, tempPath);
+        std::future<std::tuple<MCPError, std::string>> fut = std::async(&runInstall, nativePath);
         auto installer = Installer::instance();
+        while (!installer->processing) {}
         while (installer->processing) {
             uint32_t keys = getKey();
             if (keys & VPAD_BUTTON_HOME) {
@@ -65,6 +83,7 @@ bool copyAndInstall(const std::string &srcPath, void *copyBuffer) {
 int main(int argc, char** argv)
 {
     int returncode = 0;
+    uint32_t keys;
     std::vector<std::string> files;
     std::vector<std::string> folders;
 
@@ -110,14 +129,11 @@ int main(int argc, char** argv)
         goto cleanup;
     }
 
-    /*
     if (!enumerateFatFsDirectory("extusb:/", &files, &folders)) {
         WHBLogPrint("Enumerating disk failed!");
         WHBLogConsoleDraw();
         goto cleanup;
     }
-     */
-    folders.emplace_back("WUP-N-R3ME_0005000252334D45");
 
     WHBLogPrint("Installing the following titles:");
     WHBLogConsoleDraw();
@@ -126,10 +142,12 @@ int main(int argc, char** argv)
         WHBLogConsoleDraw();
     }
 
-    WHBLogPrint("Press any key to install, press HOME to exit");
+    WHBLogPrint("Press A to install, press HOME to cancel");
     WHBLogConsoleDraw();
-    if(waitForKey() & VPAD_BUTTON_HOME) {
-        goto cleanup;
+    while (!(keys & VPAD_BUTTON_A)) {
+        if((keys = waitForKey()) & VPAD_BUTTON_HOME) {
+            goto cleanup;
+        }
     }
 
     for (const auto &f : folders) {
@@ -139,6 +157,7 @@ int main(int argc, char** argv)
     cleanup:
     fini_extusb_devoptab();
     unmountWiiUDisk();
+    cleanupFs();
     Mocha_DeinitLibrary();
 
     free(copyBuffer);

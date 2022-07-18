@@ -34,6 +34,7 @@ public:
     MCPError lastErr;
     std::atomic<bool> processing;
 private:
+    int updateTime = 100000;
     Installer();
     int mcpHandle;
     bool initialized;
