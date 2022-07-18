@@ -6,32 +6,28 @@
 #include <string>
 #include <sys/unistd.h>
 #include <malloc.h>
+#include <coreinit/time.h>
 #include "Installer.h"
 
-static void mcpInstallCallback(MCPError err, void *rawData)
-{
-    auto *data = (Installer *)rawData;
+static void mcpInstallCallback(MCPError err, void *rawData) {
+    auto *data = (Installer *) rawData;
     data->lastErr = err;
     data->processing = false;
 }
 
-void removeDirectory(std::string &path)
-{
+void removeDirectory(std::string &path) {
     if (path[path.length() - 1] != '/') {
         path += '/';
     }
     DIR *dir = opendir(path.c_str());
-    if(dir != nullptr)
-    {
-        for(struct dirent *entry = readdir(dir); entry != nullptr; entry = readdir(dir))
-        {
+    if (dir != nullptr) {
+        for (struct dirent *entry = readdir(dir); entry != nullptr; entry = readdir(dir)) {
             std::string newPath(path);
             newPath += entry->d_name;
 
-            if(entry->d_type & DT_DIR)
+            if (entry->d_type & DT_DIR)
                 removeDirectory(newPath);
-            else
-            {
+            else {
                 remove(newPath.c_str());
             }
         }
@@ -44,7 +40,7 @@ static void removeFolder(const std::string &path) {
     DIR *dir = opendir(path.c_str());
     if (dir != nullptr) {
         for (struct dirent *entry = readdir(dir); entry != nullptr; entry = readdir(dir)) {
-            if(entry->d_name[0] == '.' || !(entry->d_type & DT_DIR) || strlen(entry->d_name) != 8)
+            if (entry->d_name[0] == '.' || !(entry->d_type & DT_DIR) || strlen(entry->d_name) != 8)
                 continue;
 
             std::string fullPath(path);
@@ -59,7 +55,7 @@ static void cleanupCancelledInstallation() {
             "/vol/storage_usb01/usr/import/",
             "/vol/storage_mlc01/usr/import/"
     };
-    for (auto & importPath : importPaths) {
+    for (auto &importPath: importPaths) {
         removeFolder(importPath);
     }
 }
@@ -96,19 +92,18 @@ void Installer::cancel() {
     lastErr = MCP_INSTALL_CANCELLED;
 }
 
-std::tuple<MCPError, std::string> Installer::install(MCPInstallTarget target, const std::string &wupPath, void (*installProgressCallback)(MCPInstallProgress*)) {
+std::tuple<MCPError, std::string> Installer::install(MCPInstallTarget target, const std::string &wupPath,
+                                                     void (*installProgressCallback)(MCPInstallProgress *, OSTime elapsed)) {
     if (!initialized) {
         return {-1, "Installer not initialized"};
     }
     std::string exitString;
+    OSTime start;
 
     OSLockMutex(installLock);
     IMDisableAPD();
     lastErr = MCP_InstallGetInfo(mcpHandle, wupPath.c_str(), &info->info);
     if (lastErr != 0) {
-        // 0xfffbf3e2 - no title.tmd
-        // 0xfffbfc17 - internal error
-        // everything else - ???
         switch ((unsigned int) lastErr) {
             case 0xFFFBF3E2:
                 exitString = "MCP_InstallGetInfo(): No title.tmd";
@@ -133,6 +128,7 @@ std::tuple<MCPError, std::string> Installer::install(MCPInstallTarget target, co
     info->installer = this;
     processing = true;
 
+    start = OSGetSystemTime();
     lastErr = MCP_InstallTitleAsync(mcpHandle, wupPath.c_str(), &info->titleInfo);
     if (lastErr != 0) {
         // Error starting async installation
@@ -145,7 +141,8 @@ std::tuple<MCPError, std::string> Installer::install(MCPInstallTarget target, co
         lastErr = MCP_InstallGetProgress(mcpHandle, installProgress);
         if (lastErr == 0) {
             if (installProgressCallback != nullptr) {
-                installProgressCallback(installProgress);
+                OSTime now = OSGetSystemTime();
+                installProgressCallback(installProgress, now - start);
             }
             usleep(updateTime);
         }
@@ -154,7 +151,7 @@ std::tuple<MCPError, std::string> Installer::install(MCPInstallTarget target, co
     if (lastErr != 0) {
         // Error during installation
         switch ((unsigned int) lastErr) {
-            case 0xDEAD0002:
+            case MCP_INSTALL_CANCELLED:
                 // cancelled
                 cleanupCancelledInstallation();
                 exitString = "MCP_InstallTitleAsync(): Cancelled";
@@ -182,8 +179,7 @@ std::tuple<MCPError, std::string> Installer::install(MCPInstallTarget target, co
                 if ((lastErr & 0xFFFF0000) == 0xFFFB0000) {
                     // Either USB drive failure or corrupt files
                     exitString = "MCP_InstallTitleAsync(): Corrupt files or USB drive failure";
-                }
-                else {
+                } else {
                     // unknown error
                     exitString = "MCP_InstallTitleAsync(): Unknown error";
                 }

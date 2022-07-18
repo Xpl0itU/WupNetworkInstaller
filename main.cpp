@@ -21,8 +21,8 @@ using json=nlohmann::json;
 #define COPY_BUFFER_SZ (1024 * 1024)
 
 
-void installCallback(MCPInstallProgress *progress) {
-    printProgressBar(progress->sizeProgress, progress->sizeTotal);
+void installCallback(MCPInstallProgress *progress, OSTime elapsed) {
+    printProgressBarWithSpeed(progress->sizeProgress, progress->sizeTotal, elapsed);
 }
 
 
@@ -60,6 +60,7 @@ bool copyAndInstall(const std::string &srcPath, void *copyBuffer) {
         std::future<std::tuple<MCPError, std::string>> fut = std::async(&runInstall, nativePath);
         auto installer = Installer::instance();
         while (!installer->processing) {}
+        OSTime startTime = OSGetSystemTime();
         while (installer->processing) {
             uint32_t keys = getKey();
             if (keys & VPAD_BUTTON_HOME) {
@@ -67,9 +68,11 @@ bool copyAndInstall(const std::string &srcPath, void *copyBuffer) {
             }
         }
         std::tuple<MCPError, std::string> retval = fut.get();
+        OSTime endTime = OSGetSystemTime();
         auto err = static_cast<uint32_t>(std::get<0>(retval));
         auto str = std::get<1>(retval);
         WHBLogPrintf("(%d) %s", err, str.c_str());
+        WHBLogPrintf("Took %f seconds", OSTicksToMilliseconds(endTime - startTime) / 1000.0);
         WHBLogConsoleDraw();
         return err != 0;
     } else {
@@ -109,9 +112,6 @@ int main(int argc, char** argv)
 
     //json object = {{"one", 1}, {"two", 2}};
     //WHBLogPrint(object.dump().c_str());
-    //WHBLogConsoleDraw();
-
-    //WHBLogPrint("Start main application");
     //WHBLogConsoleDraw();
 
     initFs();
@@ -154,7 +154,7 @@ int main(int argc, char** argv)
         copyAndInstall(f, copyBuffer);
     }
 
-    cleanup:
+cleanup:
     fini_extusb_devoptab();
     unmountWiiUDisk();
     cleanupFs();

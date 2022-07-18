@@ -13,6 +13,7 @@
 #include "LockingQueue.h"
 
 #include <sys/dirent.h>
+#include <future>
 // #include <mocha/mocha.h>
 
 static bool usbMounted = false;
@@ -74,12 +75,6 @@ bool mountWiiUDisk() {
 
 
 bool unmountWiiUDisk() {
-    /*
-    MochaUtilsStatus status = Mocha_UnmountFS("storage_usb");
-    WHBLogPrintf("Unmounting result: %d", status);
-    WHBLogConsoleDraw();
-    return status == MOCHA_RESULT_SUCCESS;
-     */
     FSClient *client = initFs();
     FSError err = FSAEx_Unmount(client, "/vol/storage_installer", FSA_UNMOUNT_FLAG_FORCE);
     return err == 0;
@@ -183,27 +178,100 @@ typedef struct {
     size_t len;
     size_t buf_size;
 } file_buffer;
-static file_buffer buffers[8];
+static file_buffer buffers[16];
+static char* fileBuf[2];
+static bool buffersInitialized = false;
 
-static void readThread(FILE *srcFile, LockingQueue<file_buffer> &ready, LockingQueue<file_buffer> &done) {
+static bool readThread(FILE *srcFile, LockingQueue<file_buffer> *ready, LockingQueue<file_buffer> *done) {
     file_buffer currentBuffer;
-    ready.waitAndPop(currentBuffer);
+    ready->waitAndPop(currentBuffer);
     while ((currentBuffer.len = fread(currentBuffer.buf, 1, currentBuffer.buf_size, srcFile)) > 0) {
-        done.push(currentBuffer);
-        ready.waitAndPop(currentBuffer);
+        done->push(currentBuffer);
+        ready->waitAndPop(currentBuffer);
     }
-    done.push(currentBuffer);
+    done->push(currentBuffer);
+    return ferror(srcFile) == 0;
 }
 
-static void writeThread(FILE *dstFile, LockingQueue<file_buffer> &ready, LockingQueue<file_buffer> &done) {
+static bool writeThread(FILE *dstFile, LockingQueue<file_buffer> *ready, LockingQueue<file_buffer> *done, size_t totalSize) {
+    OSTime time = OSGetSystemTime();
+    OSTime start = time;
+
     uint bytes_written;
+    size_t total_bytes_written = 0;
     file_buffer currentBuffer;
-    ready.waitAndPop(currentBuffer);
+    ready->waitAndPop(currentBuffer);
     while (currentBuffer.len > 0 && (bytes_written = fwrite(currentBuffer.buf, 1, currentBuffer.len, dstFile)) == currentBuffer.len) {
-        done.push(currentBuffer);
-        ready.waitAndPop(currentBuffer);
+        done->push(currentBuffer);
+        ready->waitAndPop(currentBuffer);
+        OSTime now = OSGetSystemTime();
+        total_bytes_written += bytes_written;
+        if(time > 0 && OSTicksToMilliseconds(now - time) >= 1000) {
+            time = now;
+            printProgressBarWithSpeed(total_bytes_written, totalSize, now - start);
+        }
     }
-    done.push(currentBuffer);
+    done->push(currentBuffer);
+    return ferror(dstFile) == 0;
+}
+
+static bool copyFileThreaded(FILE *srcFile, FILE *dstFile, size_t totalSize) {
+    size_t bufferSize = 1024 * 512;
+
+    WHBLogPrintf("Multithreaded copy start");
+    WHBLogConsoleDraw();
+    LockingQueue<file_buffer> read;
+    LockingQueue<file_buffer> write;
+    for (auto & buffer : buffers) {
+        if (!buffersInitialized) {
+            buffer.buf = memalign(0x40, bufferSize);
+            buffer.len = 0;
+            buffer.buf_size = bufferSize;
+        }
+        read.push(buffer);
+    }
+    if (!buffersInitialized) {
+        fileBuf[0] = static_cast<char*>(memalign(0x40, bufferSize));
+        fileBuf[1] = static_cast<char*>(memalign(0x40, bufferSize));
+    }
+    buffersInitialized = true;
+    setvbuf(srcFile, fileBuf[0], _IOFBF, bufferSize);
+    setvbuf(dstFile, fileBuf[1], _IOFBF, bufferSize);
+
+    OSTime start = OSGetSystemTime();
+    std::future<bool> readFut = std::async(std::launch::async, readThread, srcFile, &read, &write);
+    std::future<bool> writeFut = std::async(std::launch::async, writeThread, dstFile, &write, &read, totalSize);
+    bool success = readFut.get() && writeFut.get();
+    OSTime end = OSGetSystemTime();
+    double sec = OSTicksToMilliseconds(end - start) / 1000.0;
+    WHBLogPrintf("Copy took %f seconds (%f MiB/s)", sec, (totalSize / sec) / 1048576);
+    return success;
+}
+
+static bool copyFileSinglethreaded(FILE *srcFile, FILE *dstFile, size_t totalSize, void *buffer, size_t buf_size) {
+    OSTime time = OSGetSystemTime();
+    OSTime start = time;
+    off_t total_bytes_written = 0;
+    uint bytes_read;
+    while ((bytes_read = fread(buffer, 1, buf_size, srcFile)) > 0) {
+        size_t write_count = fwrite(buffer, 1, bytes_read, dstFile);
+        if (write_count < bytes_read) {
+            WHBLogPrintf("fwrite error %d", errno);
+            return false;
+        }
+        total_bytes_written += write_count;
+
+        OSTime now = OSGetSystemTime();
+        if(time > 0 && OSTicksToMilliseconds(now - time) >= 1000) {
+            time = now;
+            printProgressBarWithSpeed(total_bytes_written, totalSize, now - start);
+        }
+    }
+    if (ferror(srcFile) != 0) {
+        WHBLogPrintf("ferror encountered: %d", errno);
+        return false;
+    }
+    return true;
 }
 
 bool copyFile(const std::string &src, const std::string &dst, void *buffer, size_t buf_size) {
@@ -214,8 +282,7 @@ bool copyFile(const std::string &src, const std::string &dst, void *buffer, size
     struct stat dstInfo{};
     FILE *srcFile = nullptr;
     FILE *dstFile = nullptr;
-    off_t total_bytes_written = 0;
-    OSTime time = OSGetSystemTime();
+    bool ret = true;
 
     int rc = stat(src.c_str(), &srcInfo);
     if (rc < 0) {
@@ -246,29 +313,14 @@ bool copyFile(const std::string &src, const std::string &dst, void *buffer, size
         goto cleanup;
     }
 
-    uint bytes_read;
-    while ((bytes_read = fread(buffer, 1, buf_size, srcFile)) > 0) {
-        size_t write_count = fwrite(buffer, 1, bytes_read, dstFile);
-        if (write_count < bytes_read) {
-            WHBLogPrintf("fwrite error %d", errno);
-            goto cleanup;
-        }
-        total_bytes_written += write_count;
-
-        OSTime now = OSGetSystemTime();
-        if(time > 0 && OSTicksToMilliseconds(now - time) >= 1000) {
-            time = now;
-            printProgressBar(total_bytes_written, srcInfo.st_size);
-        }
+    if (srcInfo.st_size > 1024 * 1024 * 10) {
+        ret = copyFileThreaded(srcFile, dstFile, srcInfo.st_size);
+    } else {
+        ret = copyFileSinglethreaded(srcFile, dstFile, srcInfo.st_size, buffer, buf_size);
     }
-    if (ferror(srcFile) != 0) {
-        WHBLogPrintf("ferror encountered: %d", errno);
-        goto cleanup;
-    }
-    return true;
 
     cleanup:
     if (srcFile != nullptr) fclose(srcFile);
     if (dstFile != nullptr) fclose(dstFile);
-    return false;
+    return ret;
 }

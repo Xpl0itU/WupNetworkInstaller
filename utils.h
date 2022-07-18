@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
+#include <coreinit/time.h>
 
-void printProgressBar(uint64_t current, uint64_t total);
+void printProgressBarWithSpeed(uint64_t current, uint64_t total, OSTime elapsed);
 uint32_t getKey();
 uint32_t waitForKey();

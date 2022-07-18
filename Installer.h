@@ -28,13 +28,13 @@ public:
         return s;
     }
 
-    std::tuple<int, std::string> install(MCPInstallTarget target, const std::string &wupPath, void (*installProgressCallback)(MCPInstallProgress*));
+    std::tuple<int, std::string> install(MCPInstallTarget target, const std::string &wupPath, void (*installProgressCallback)(MCPInstallProgress*, OSTime));
     void cancel();
 
     MCPError lastErr;
     std::atomic<bool> processing;
 private:
-    int updateTime = 100000;
+    int updateTime = 1000000;
     Installer();
     int mcpHandle;
     bool initialized;

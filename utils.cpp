@@ -3,12 +3,12 @@
 #include <whb/log.h>
 #include <whb/log_console.h>
 #include <vpad/input.h>
+#include <coreinit/time.h>
 #include "utils.h"
 
 static uint32_t lastKey = 0;
 
-
-void printProgressBar(uint64_t current, uint64_t total) {
+void printProgressBarWithSpeed(uint64_t current, uint64_t total, OSTime elapsed) {
     int percent = static_cast<int>(current * 100.0 / total);
 
     std::string bar;
@@ -16,14 +16,15 @@ void printProgressBar(uint64_t current, uint64_t total) {
     bar.push_back('\r');
     bar.push_back('[');
     int i;
-    for (i = 0; i < percent; i += 4) {
+    for (i = 0; i < percent; i += 10) {
         bar.push_back('=');
     }
     bar.push_back('>');
-    for (; i < 100; i+= 4) {
+    for (; i < 100; i+= 10) {
         bar.push_back(' ');
     }
-    sprintf(buf, "]  %.2f/%.2f MiB (%d pct)", current / 1048576.0, total / 1048576.0, percent);
+    double sec = OSTicksToMilliseconds(elapsed) / 1000.0;
+    sprintf(buf, "] %.2f/%.2f MiB (%d pct, %.2f MiB/s)", current / 1048576.0, total / 1048576.0, percent, current / 1048576.0 / sec);
     bar += buf;
     WHBLogPrintf(bar.c_str());
     WHBLogConsoleDraw();
