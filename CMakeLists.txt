@@ -46,7 +46,8 @@ set(fatfs_sources
         diskio.c
         ff.c
         ffsystem.c
-        ffunicode.c)
+        ffunicode.c
+        devices.c)
 list(TRANSFORM fatfs_sources PREPEND "fatfs/")
 
 add_executable(wupnetworkinstaller
@@ -55,6 +56,7 @@ add_executable(wupnetworkinstaller
         ios_fs.c
         utils.cpp
         Installer.cpp
+        net_receive.cpp
         ${fatfs_sources}
         ${extusb_devoptab_sources} Installer.cpp Installer.h)
 set_target_properties(wupnetworkinstaller PROPERTIES LINKER_LANGUAGE CXX)

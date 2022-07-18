@@ -1,6 +1,5 @@
 #pragma once
 #include <stdint.h>
+#include <string>
 
-
-int receiveFile(int32_t sock_fd);
-int receiveAllFiles(int32_t sock_fd);
+int downloadFile(const std::string &remoteUrl, const std::string &localPath);

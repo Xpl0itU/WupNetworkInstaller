@@ -28,7 +28,7 @@ public:
         return s;
     }
 
-    int install(MCPInstallTarget target, const std::string &wupPath, void (*installProgressCallback)(MCPInstallProgress*));
+    std::tuple<int, std::string> install(MCPInstallTarget target, const std::string &wupPath, void (*installProgressCallback)(MCPInstallProgress*));
     void cancel();
 
     MCPError lastErr;

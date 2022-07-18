@@ -7,32 +7,35 @@
 #include <whb/log.h>
 #include <whb/log_console.h>
 #include <mocha/mocha.h>
+#include <sys/unistd.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-static FSClient fsClient;
+extern FSClient *__wut_devoptab_fs_client;
 static bool initialized = false;
 
 FSClient *initFs() {
     if (initialized) {
-        return &fsClient;
+        return __wut_devoptab_fs_client;
     }
 
+    /*
     WHBLogPrint("FSInit()");
     WHBLogConsoleDraw();
     FSInit();
     WHBLogPrint("FSAddClient()");
     WHBLogConsoleDraw();
-    if (FSAddClient(&fsClient, FS_ERROR_FLAG_ALL) != FS_STATUS_OK) {
+    if (FSAddClient(__wut_devoptab_fs_client, FS_ERROR_FLAG_ALL) != FS_STATUS_OK) {
         WHBLogPrint("FSAddClient failed! Press any key to exit");
         WHBLogConsoleDraw();
         return NULL;
     }
+    */
     WHBLogPrint("Mocha_UnlockFSClient()");
     WHBLogConsoleDraw();
-    int returncode = Mocha_UnlockFSClient(&fsClient);
+    int returncode = Mocha_UnlockFSClient(__wut_devoptab_fs_client);
     if (returncode < 0) {
         WHBLogPrintf("UnlockFSClient failed %d! Press any key to exit", returncode);
         WHBLogConsoleDraw();
@@ -40,13 +43,7 @@ FSClient *initFs() {
     }
 
     initialized = true;
-    return &fsClient;
-}
-
-int cleanupFs() {
-    FSDelClient(&fsClient, FS_ERROR_FLAG_ALL);
-    initialized = false;
-    return 0;
+    return __wut_devoptab_fs_client;
 }
 
 
