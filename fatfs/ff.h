@@ -135,6 +135,7 @@ typedef struct {
 	BYTE	n_fats;			/* Number of FATs (1 or 2) */
 	BYTE	wflag;			/* win[] flag (b0:dirty) */
 	BYTE	fsi_flag;		/* FSINFO flags (b7:disabled, b0:dirty) */
+    WORD    signature;      /* Stored Wii U drive signature */
 	WORD	id;				/* Volume mount ID */
 	WORD	n_rootdir;		/* Number of root directory entries (FAT12/16) */
 	WORD	csize;			/* Cluster size [sectors] */
@@ -156,6 +157,7 @@ typedef struct {
 #endif
 #if FF_FS_RPATH
 	DWORD	cdir;			/* Current directory start cluster (0:root) */
+    DWORD   scannedDir;     /* Which directory is currently cached, which can be utilized using f_chdir only */
 #if FF_FS_EXFAT
 	DWORD	cdc_scl;		/* Containing directory start cluster (invalid when cdir is 0) */
 	DWORD	cdc_size;		/* b31-b8:Size of containing directory, b7-b0: Chain status */
@@ -223,7 +225,7 @@ typedef struct {
 
 
 
-/* Directory object structure (DIR) */
+/* Directory object structure (DIR_FAT) */
 
 typedef struct {
 	FFOBJID	obj;			/* Object identifier */
@@ -238,7 +240,7 @@ typedef struct {
 #if FF_USE_FIND
 	const TCHAR* pat;		/* Pointer to the name matching pattern */
 #endif
-} DIR;
+} DIR_FAT;
 
 
 
@@ -308,11 +310,11 @@ FRESULT f_write (FIL* fp, const void* buff, UINT btw, UINT* bw);	/* Write data t
 FRESULT f_lseek (FIL* fp, FSIZE_t ofs);								/* Move file pointer of the file object */
 FRESULT f_truncate (FIL* fp);										/* Truncate the file */
 FRESULT f_sync (FIL* fp);											/* Flush cached data of the writing file */
-FRESULT f_opendir (DIR* dp, const TCHAR* path);						/* Open a directory */
-FRESULT f_closedir (DIR* dp);										/* Close an open directory */
-FRESULT f_readdir (DIR* dp, FILINFO* fno);							/* Read a directory item */
-FRESULT f_findfirst (DIR* dp, FILINFO* fno, const TCHAR* path, const TCHAR* pattern);	/* Find first file */
-FRESULT f_findnext (DIR* dp, FILINFO* fno);							/* Find next file */
+FRESULT f_opendir (DIR_FAT* dp, const TCHAR* path);						/* Open a directory */
+FRESULT f_closedir (DIR_FAT* dp);										/* Close an open directory */
+FRESULT f_readdir (DIR_FAT* dp, FILINFO* fno);							/* Read a directory item */
+FRESULT f_findfirst (DIR_FAT* dp, FILINFO* fno, const TCHAR* path, const TCHAR* pattern);	/* Find first file */
+FRESULT f_findnext (DIR_FAT* dp, FILINFO* fno);							/* Find next file */
 FRESULT f_mkdir (const TCHAR* path);								/* Create a sub directory */
 FRESULT f_unlink (const TCHAR* path);								/* Delete an existing file or directory */
 FRESULT f_rename (const TCHAR* path_old, const TCHAR* path_new);	/* Rename/Move a file or directory */

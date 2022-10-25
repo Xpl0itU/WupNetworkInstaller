@@ -39,7 +39,7 @@ typedef struct {
  */
 typedef struct {
     //! FS handle
-    DIR dp;
+    DIR_FAT dp;
 
     //! Temporary storage for reading entries
     FILINFO entry_data;

@@ -33,7 +33,7 @@ __extusb_fs_fixpath(struct _reent *r,
         return NULL;
     }
 
-    sprintf(fixedPath, "%d:%s", DEV_USB_EXT, p);
+    sprintf(fixedPath, "%d:%s", DEV_SD, p);
     return fixedPath;
 }
 

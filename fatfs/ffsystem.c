@@ -5,8 +5,6 @@
 
 
 #include "ff.h"
-#include <coreinit/mutex.h>
-#include <malloc.h>
 
 
 #if FF_USE_LFN == 3	/* Dynamic memory allocation */
@@ -14,6 +12,8 @@
 /*------------------------------------------------------------------------*/
 /* Allocate a memory block                                                */
 /*------------------------------------------------------------------------*/
+
+#include <stdlib.h>
 
 void* ff_memalloc (	/* Returns pointer to the allocated memory block (null if not enough core) */
 	UINT msize		/* Number of bytes to allocate */
@@ -56,12 +56,27 @@ int ff_cre_syncobj (	/* 1:Function succeeded, 0:Could not create the sync object
 	FF_SYNC_t* sobj		/* Pointer to return the created sync object */
 )
 {
-    // mutex is 44 bytes
-    FF_SYNC_t mutex = memalign(0x40, sizeof(OSMutex));
-    if (mutex == NULL) return 0;
-    OSInitMutex(mutex);
-    *sobj = mutex;
-    return 1;
+	/* Win32 */
+	*sobj = CreateMutex(NULL, FALSE, NULL);
+	return (int)(*sobj != INVALID_HANDLE_VALUE);
+
+	/* uITRON */
+//	T_CSEM csem = {TA_TPRI,1,1};
+//	*sobj = acre_sem(&csem);
+//	return (int)(*sobj > 0);
+
+	/* uC/OS-II */
+//	OS_ERR err;
+//	*sobj = OSMutexCreate(0, &err);
+//	return (int)(err == OS_NO_ERR);
+
+	/* FreeRTOS */
+//	*sobj = xSemaphoreCreateMutex();
+//	return (int)(*sobj != NULL);
+
+	/* CMSIS-RTOS */
+//	*sobj = osMutexCreate(&Mutex[vol]);
+//	return (int)(*sobj != NULL);
 }
 
 
@@ -77,8 +92,23 @@ int ff_del_syncobj (	/* 1:Function succeeded, 0:Could not delete due to an error
 	FF_SYNC_t sobj		/* Sync object tied to the logical drive to be deleted */
 )
 {
-	free(sobj);
-    return 1;
+	/* Win32 */
+	return (int)CloseHandle(sobj);
+
+	/* uITRON */
+//	return (int)(del_sem(sobj) == E_OK);
+
+	/* uC/OS-II */
+//	OS_ERR err;
+//	OSMutexDel(sobj, OS_DEL_ALWAYS, &err);
+//	return (int)(err == OS_NO_ERR);
+
+	/* FreeRTOS */
+//  vSemaphoreDelete(sobj);
+//	return 1;
+
+	/* CMSIS-RTOS */
+//	return (int)(osMutexDelete(sobj) == osOK);
 }
 
 
@@ -93,9 +123,22 @@ int ff_req_grant (	/* 1:Got a grant to access the volume, 0:Could not get a gran
 	FF_SYNC_t sobj	/* Sync object to wait */
 )
 {
-    // TODO: Use OSTryLockMutex for timeout
-    OSLockMutex(sobj);
-    return 1;
+	/* Win32 */
+	return (int)(WaitForSingleObject(sobj, FF_FS_TIMEOUT) == WAIT_OBJECT_0);
+
+	/* uITRON */
+//	return (int)(wai_sem(sobj) == E_OK);
+
+	/* uC/OS-II */
+//	OS_ERR err;
+//	OSMutexPend(sobj, FF_FS_TIMEOUT, &err));
+//	return (int)(err == OS_NO_ERR);
+
+	/* FreeRTOS */
+//	return (int)(xSemaphoreTake(sobj, FF_FS_TIMEOUT) == pdTRUE);
+
+	/* CMSIS-RTOS */
+//	return (int)(osMutexWait(sobj, FF_FS_TIMEOUT) == osOK);
 }
 
 
@@ -109,7 +152,20 @@ void ff_rel_grant (
 	FF_SYNC_t sobj	/* Sync object to be signaled */
 )
 {
-    OSUnlockMutex(sobj);
+	/* Win32 */
+	ReleaseMutex(sobj);
+
+	/* uITRON */
+//	sig_sem(sobj);
+
+	/* uC/OS-II */
+//	OSMutexPost(sobj);
+
+	/* FreeRTOS */
+//	xSemaphoreGive(sobj);
+
+	/* CMSIS-RTOS */
+//	osMutexRelease(sobj);
 }
 
 #endif

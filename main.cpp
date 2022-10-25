@@ -15,11 +15,9 @@
 #include "Installer.h"
 #include "fatfs/extusb_devoptab/extusb_devoptab.h"
 
-#include <nlohmann/json.hpp>
-using json=nlohmann::json;
+#include "state.h"
 
 #define COPY_BUFFER_SZ (1024 * 1024)
-
 
 void installCallback(MCPInstallProgress *progress, OSTime elapsed) {
     printProgressBarWithSpeed(progress->sizeProgress, progress->sizeTotal, elapsed);
@@ -91,6 +89,7 @@ int main(int argc, char** argv)
     std::vector<std::string> folders;
 
     WHBProcInit();
+    initState();
     WHBLogConsoleInit();
     WHBLogUdpInit();
     WHBLogConsoleSetColor(0);
@@ -110,10 +109,6 @@ int main(int argc, char** argv)
     WHBLogPrint("Heap memory initialized");
     WHBLogConsoleDraw();
 
-    //json object = {{"one", 1}, {"two", 2}};
-    //WHBLogPrint(object.dump().c_str());
-    //WHBLogConsoleDraw();
-
     initFs();
     returncode = init_extusb_devoptab();
     if (returncode != 0) {
@@ -123,13 +118,14 @@ int main(int argc, char** argv)
     }
     WHBLogPrint("Devoptab initialized, mounting wiiu disk");
     WHBLogConsoleDraw();
+    /*
     if (!mountWiiUDisk()) {
         WHBLogPrintf("Mounting wiiu disk failed!");
         WHBLogConsoleDraw();
         goto cleanup;
-    }
+    }*/
 
-    if (!enumerateFatFsDirectory("extusb:/", &files, &folders)) {
+    if (!enumerateFatFsDirectory("sd:/", &files, &folders)) {
         WHBLogPrint("Enumerating disk failed!");
         WHBLogConsoleDraw();
         goto cleanup;
@@ -142,23 +138,11 @@ int main(int argc, char** argv)
         WHBLogConsoleDraw();
     }
 
-    WHBLogPrint("Press A to install, press HOME to cancel");
-    WHBLogConsoleDraw();
-    while (!(keys & VPAD_BUTTON_A)) {
-        if((keys = waitForKey()) & VPAD_BUTTON_HOME) {
-            goto cleanup;
-        }
-    }
-
-    for (const auto &f : folders) {
-        copyAndInstall(f, copyBuffer);
-    }
-
 cleanup:
     fini_extusb_devoptab();
     unmountWiiUDisk();
     cleanupFs();
-    Mocha_DeinitLibrary();
+    Mocha_DeInitLibrary();
 
     free(copyBuffer);
 
@@ -166,8 +150,8 @@ cleanup:
     WHBLogConsoleDraw();
     waitForKey();
 
-    WHBLogConsoleFree();
     WHBLogUdpDeinit();
+    shutdownState();
     WHBProcShutdown();
     return returncode;
 }
